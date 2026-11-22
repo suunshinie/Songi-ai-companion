@@ -4,20 +4,15 @@ import {
   approveMemoryProposal,
   BREATH_PHASES,
   buildCompanionSystemInstruction,
-  canSendPeerRequest,
-  canTransitionRequestStatus,
-  computePeerRecommendations,
   computeWordRevealDelay,
   createInitialBreathState,
   deriveAuthSummary,
   detectCompanionLanguage,
-  filterAndSortFeedPosts,
   filterJournalEntries,
   formatMemoryUsage,
   generateCompanionReply,
   isNoiseOnlyTranscript,
   mapFirebaseAuthError,
-  moderateUserContent,
   reduceVoiceConversationPhase,
   sanitizeChatHistory,
   sanitizeFirestoreId,
@@ -25,15 +20,7 @@ import {
   stepBreathState,
   stripMarkdownForSpeech,
 } from './shongiLogic';
-import {
-  ApprovedMemory,
-  FeedPost,
-  JournalEntry,
-  MemoryProposal,
-  PeerConversationRequest,
-  UserPublicProfile,
-  VoiceConversationPhase,
-} from '../types/shongi';
+import { ApprovedMemory, JournalEntry, MemoryProposal, VoiceConversationPhase } from '../types/shongi';
 
 const sampleEntries: JournalEntry[] = [
   {
@@ -278,225 +265,5 @@ test('stripMarkdownForSpeech and isNoiseOnlyTranscript clean voice payloads', ()
   assert.equal(reduceVoiceConversationPhase('thinking', 'USER_INTERRUPT'), 'listening');
   assert.equal(reduceVoiceConversationPhase('transcribing', 'USER_INTERRUPT'), 'listening');
 });
-
-test('computePeerRecommendations scores shared tags/interests, filters blocked/unavailable peers, and builds clear explanation', () => {
-  const me: UserPublicProfile = {
-    uid: 'u-me',
-    displayName: 'Anisur',
-    bio: '',
-    avatarTone: 'sage',
-    avatarInitials: 'AN',
-    statusTags: ['Student', 'Study stress', 'Exam pressure'],
-    interests: ['Technology', 'Music'],
-    availability: 'available',
-    preferredFeedVisibility: 'community',
-    showOnlineStatus: false,
-  };
-
-  const candidates: UserPublicProfile[] = [
-    me,
-    {
-      uid: 'u-high',
-      displayName: 'Nadia',
-      bio: 'CS undergrad trying to stay steady.',
-      avatarTone: 'terracotta',
-      avatarInitials: 'NA',
-      statusTags: ['Student', 'Study stress'],
-      interests: ['Technology'],
-      availability: 'available',
-      preferredFeedVisibility: 'community',
-      showOnlineStatus: false,
-    },
-    {
-      uid: 'u-low',
-      displayName: 'Tariq',
-      bio: 'Early career.',
-      avatarTone: 'navy',
-      avatarInitials: 'TA',
-      statusTags: ['Job seeker'],
-      interests: ['Music'],
-      availability: 'open_to_requests',
-      preferredFeedVisibility: 'community',
-      showOnlineStatus: false,
-    },
-    {
-      uid: 'u-blocked',
-      displayName: 'Blocked',
-      bio: '',
-      avatarTone: 'sand',
-      avatarInitials: 'BL',
-      statusTags: ['Student', 'Study stress'],
-      interests: ['Technology'],
-      availability: 'available',
-      preferredFeedVisibility: 'community',
-      showOnlineStatus: false,
-    },
-    {
-      uid: 'u-break',
-      displayName: 'On Break',
-      bio: '',
-      avatarTone: 'sand',
-      avatarInitials: 'OB',
-      statusTags: ['Student', 'Study stress'],
-      interests: ['Technology'],
-      availability: 'taking_a_break',
-      preferredFeedVisibility: 'community',
-      showOnlineStatus: false,
-    },
-  ];
-
-  const recs = computePeerRecommendations(me, candidates, ['u-blocked']);
-  assert.equal(recs.length, 2);
-  assert.equal(recs[0].profile.uid, 'u-high');
-  assert.ok(recs[0].score > recs[1].score);
-  assert.ok(recs[0].explanation.includes('Student'));
-  assert.ok(recs[0].explanation.includes('Study stress'));
-});
-
-test('canSendPeerRequest and canTransitionRequestStatus enforce duplicates, rate limits, and terminal lock', () => {
-  const recipient: UserPublicProfile = {
-    uid: 'u-2',
-    displayName: 'Riya',
-    bio: '',
-    avatarTone: 'sage',
-    avatarInitials: 'RI',
-    statusTags: ['Student'],
-    interests: ['Reading'],
-    availability: 'open_to_requests',
-    preferredFeedVisibility: 'community',
-    showOnlineStatus: false,
-  };
-
-  const now = 1_700_000_000_000;
-  const pendingReq: PeerConversationRequest = {
-    id: 'req-1',
-    senderUid: 'u-1',
-    senderName: 'Me',
-    senderAvatarTone: 'sage',
-    senderTags: ['Student'],
-    recipientUid: 'u-2',
-    recipientName: 'Riya',
-    recipientAvatarTone: 'sage',
-    recipientTags: ['Student'],
-    status: 'pending',
-    introMessage: 'Hi!',
-    sharedContextSummary: 'You both selected Student.',
-    createdAtMs: now - 10_000,
-    updatedAtMs: now - 10_000,
-  };
-
-  assert.equal(canSendPeerRequest('u-1', recipient, [], [], now).allowed, true);
-  assert.equal(canSendPeerRequest('u-1', recipient, [pendingReq], [], now).allowed, false);
-  assert.equal(canSendPeerRequest('u-1', recipient, [], ['u-2'], now).allowed, false);
-  assert.equal(
-    canSendPeerRequest('u-1', { ...recipient, availability: 'not_accepting' }, [], [], now).allowed,
-    false
-  );
-
-  // Rate limit check
-  const spamReqs = Array.from({ length: 6 }, (_, i) => ({
-    ...pendingReq,
-    id: `spam-${i}`,
-    recipientUid: `u-other-${i}`,
-    createdAtMs: now - 5_000,
-  }));
-  assert.equal(canSendPeerRequest('u-1', recipient, spamReqs, [], now).allowed, false);
-
-  // State transition rules
-  assert.equal(canTransitionRequestStatus('pending', 'accepted', 'recipient'), true);
-  assert.equal(canTransitionRequestStatus('pending', 'declined', 'recipient'), true);
-  assert.equal(canTransitionRequestStatus('pending', 'accepted', 'sender'), false);
-  assert.equal(canTransitionRequestStatus('pending', 'cancelled', 'sender'), true);
-  assert.equal(canTransitionRequestStatus('accepted', 'cancelled', 'sender'), false);
-  assert.equal(canTransitionRequestStatus('declined', 'accepted', 'recipient'), false);
-});
-
-test('moderateUserContent catches PII/abuse and detects crisis gently without claiming emergency dispatch', () => {
-  assert.equal(moderateUserContent('Call me at 01712345678').allowed, false);
-  assert.equal(moderateUserContent('Hey, feeling a bit tired from exam prep tonight.').allowed, true);
-
-  const crisisRes = moderateUserContent('I feel like I want to end my life tonight.');
-  assert.equal(crisisRes.allowed, true);
-  assert.equal(crisisRes.isCrisisDetected, true);
-});
-
-test('filterAndSortFeedPosts enforces private visibility, blocked authors, and For You overlap', () => {
-  const posts: FeedPost[] = [
-    {
-      id: 'p-private-other',
-      authorUid: 'u-other',
-      authorName: 'Other',
-      authorAvatarTone: 'navy',
-      postType: 'thought',
-      body: 'Secret',
-      tags: ['Student'],
-      visibility: 'private',
-      reactionCounts: { hear_you: 0, sending_support: 0, relatable: 0, you_got_this: 0 },
-      commentCount: 0,
-      createdAtMs: 300,
-      updatedAtMs: 300,
-    },
-    {
-      id: 'p-blocked',
-      authorUid: 'u-blocked',
-      authorName: 'Blocked',
-      authorAvatarTone: 'sand',
-      postType: 'mood',
-      body: 'Should hide',
-      tags: ['Student'],
-      visibility: 'community',
-      reactionCounts: { hear_you: 0, sending_support: 0, relatable: 0, you_got_this: 0 },
-      commentCount: 0,
-      createdAtMs: 400,
-      updatedAtMs: 400,
-    },
-    {
-      id: 'p-match',
-      authorUid: 'u-friend',
-      authorName: 'Friend',
-      authorAvatarTone: 'sage',
-      postType: 'study_life',
-      body: 'Exam stress is real today.',
-      tags: ['Student', 'Exam pressure'],
-      visibility: 'community',
-      reactionCounts: { hear_you: 1, sending_support: 0, relatable: 0, you_got_this: 0 },
-      commentCount: 0,
-      createdAtMs: 100,
-      updatedAtMs: 100,
-    },
-    {
-      id: 'p-mine-private',
-      authorUid: 'u-me',
-      authorName: 'Me',
-      authorAvatarTone: 'sage',
-      postType: 'thought',
-      body: 'My private reflection',
-      tags: ['Personal growth'],
-      visibility: 'private',
-      reactionCounts: { hear_you: 0, sending_support: 0, relatable: 0, you_got_this: 0 },
-      commentCount: 0,
-      createdAtMs: 200,
-      updatedAtMs: 200,
-    },
-  ];
-
-  const viewer = {
-    uid: 'u-me',
-    statusTags: ['Student', 'Exam pressure'],
-    interests: ['Technology'],
-  };
-
-  const forYou = filterAndSortFeedPosts(posts, viewer, 'for_you', ['u-blocked']);
-  assert.equal(forYou.length, 2);
-  assert.equal(forYou[0].id, 'p-match');
-  assert.equal(forYou[1].id, 'p-mine-private');
-
-  const studyOnly = filterAndSortFeedPosts(posts, viewer, 'study_life', ['u-blocked']);
-  assert.deepEqual(
-    studyOnly.map((p) => p.id),
-    ['p-match']
-  );
-});
-
 
 

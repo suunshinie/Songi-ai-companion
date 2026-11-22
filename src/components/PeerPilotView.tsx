@@ -1,118 +1,44 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  AppScreen,
-  AuthAccountSummary,
-  AvatarTone,
-  PeerChatMessage,
-  PeerConversation,
-  PeerConversationRequest,
-  UserPublicProfile,
-} from '../types/shongi';
-import {
-  ALL_STATUS_TAGS,
-  AVAILABILITY_META,
-  canSendPeerRequest,
-  canTransitionRequestStatus,
-  computePeerRecommendations,
-  INTEREST_TAGS,
-  moderateUserContent,
-} from '../utils/shongiLogic';
+import React, { useState } from 'react';
+import { AppScreen, PeerSupporter } from '../types/shongi';
+import { PEER_SUPPORTERS } from '../data/seedData';
 
 interface PeerPilotViewProps {
-  authSummary: AuthAccountSummary | null;
-  myProfile: UserPublicProfile;
-  candidates: UserPublicProfile[];
-  blockedUids: string[];
-  requests: PeerConversationRequest[];
-  conversations: PeerConversation[];
-  activeMessagesByConvId: Record<string, PeerChatMessage[]>;
-  onSelectConversation: (conversationId: string | null) => void;
-  onSendRequest: (recipient: UserPublicProfile, introMessage: string, sharedSummary: string) => Promise<void>;
-  onAcceptRequest: (req: PeerConversationRequest) => Promise<PeerConversation | null>;
-  onDeclineRequest: (req: PeerConversationRequest) => Promise<void>;
-  onCancelRequest: (req: PeerConversationRequest) => Promise<void>;
-  onIgnoreRequest: (req: PeerConversationRequest) => Promise<void>;
-  onSendMessage: (conversation: PeerConversation, text: string) => Promise<void>;
-  onEndConversation: (conversation: PeerConversation) => Promise<void>;
-  onBlockUser: (targetUid: string, targetName: string, relatedRequest?: PeerConversationRequest, relatedConv?: PeerConversation) => Promise<void>;
-  onReportContent: (payload: {
-    targetType: 'user' | 'conversation';
-    targetId: string;
-    targetUid?: string;
-    reason: string;
-    details?: string;
-  }) => Promise<void>;
   onNavigate: (screen: AppScreen) => void;
 }
 
-type PeerTab = 'discover' | 'received' | 'sent' | 'chats';
+const ACADEMIC_TOPICS = [
+  {
+    id: 'medical',
+    title: 'Medical / Dental Admission Pressure',
+    banglaTag: 'মেডিকেল',
+    description:
+      'Overcoming extreme score cutoffs, mock test panic, and competitive dread.',
+  },
+  {
+    id: 'public-private',
+    title: 'Public vs. Private University Dilemma',
+    banglaTag: 'পাবলিক বনাম প্রাইভেট',
+    description: 'Dealing with societal stigma, tuition feasibility, and career clarity.',
+  },
+  {
+    id: 'parental-disappointment',
+    title: 'Dealing with Parental Disappointment',
+    banglaTag: 'পারিবারিক প্রত্যাশা',
+    description: 'Managing heavy domestic pressure, silence, comparisons, and guilt.',
+  },
+];
 
-function getAvatarToneClass(tone: AvatarTone): string {
-  switch (tone) {
-    case 'terracotta':
-      return 'bg-[#C97B5A]/20 text-[#9a442d]';
-    case 'navy':
-      return 'bg-[#1e3a4c]/15 text-[#042436]';
-    case 'sand':
-      return 'bg-[#E3D9CD] text-[#2A2A28]';
-    case 'sage':
-    default:
-      return 'bg-[#2F6F63]/15 text-[#2F6F63]';
-  }
-}
-
-export const PeerPilotView: React.FC<PeerPilotViewProps> = ({
-  authSummary,
-  myProfile,
-  candidates,
-  blockedUids,
-  requests,
-  conversations,
-  activeMessagesByConvId,
-  onSelectConversation,
-  onSendRequest,
-  onAcceptRequest,
-  onDeclineRequest,
-  onCancelRequest,
-  onIgnoreRequest,
-  onSendMessage,
-  onEndConversation,
-  onBlockUser,
-  onReportContent,
-  onNavigate,
-}) => {
-  const [activeTab, setActiveTab] = useState<PeerTab>('discover');
-  const [filterTag, setFilterTag] = useState<string>('');
+export const PeerPilotView: React.FC<PeerPilotViewProps> = ({ onNavigate }) => {
   const [guidelinesOpen, setGuidelinesOpen] = useState(false);
-
-  // Send request modal
-  const [requestTarget, setRequestTarget] = useState<{
-    profile: UserPublicProfile;
-    explanation: string;
-  } | null>(null);
-  const [introMessage, setIntroMessage] = useState('');
-  const [requestError, setRequestError] = useState<string | null>(null);
-  const [crisisDetectedNotice, setCrisisDetectedNotice] = useState(false);
-  const [sendingRequest, setSendingRequest] = useState(false);
-
-  // Active conversation selection & composer
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
-  const [messageDraft, setMessageDraft] = useState('');
-  const [messageError, setMessageError] = useState<string | null>(null);
-  const [sendingMessage, setSendingMessage] = useState(false);
-
-  // Report modal
-  const [reportTarget, setReportTarget] = useState<{
-    targetType: 'user' | 'conversation';
-    targetId: string;
-    targetUid?: string;
-    label: string;
-  } | null>(null);
-  const [reportReason, setReportReason] = useState('Boundary or safety concern');
-  const [reportDetails, setReportDetails] = useState('');
-
-  // Toast feedback
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [endModalOpen, setEndModalOpen] = useState(false);
+  const [selectedSupporter, setSelectedSupporter] = useState<PeerSupporter | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState('public-private');
+  const [reportReason, setReportReason] = useState('unsolicited-contact');
+  const [connectionEnded, setConnectionEnded] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<'idle' | 'matching' | 'queued'>('idle');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     window.setTimeout(() => {
@@ -120,1014 +46,757 @@ export const PeerPilotView: React.FC<PeerPilotViewProps> = ({
     }, 3500);
   };
 
-  useEffect(() => {
-    onSelectConversation(activeTab === 'chats' ? selectedConvId : null);
-  }, [activeTab, selectedConvId, onSelectConversation]);
-
-  const myUid = authSummary?.uid ?? myProfile.uid;
-
-  const recommendations = useMemo(
-    () => computePeerRecommendations(myProfile, candidates, blockedUids, filterTag),
-    [myProfile, candidates, blockedUids, filterTag]
-  );
-
-  const receivedRequests = useMemo(
-    () =>
-      requests.filter(
-        (r) =>
-          r.recipientUid === myUid &&
-          !blockedUids.includes(r.senderUid) &&
-          !(r.status === 'pending' && r.ignoredByRecipient)
-      ),
-    [requests, myUid, blockedUids]
-  );
-
-  const pendingReceivedCount = useMemo(
-    () => receivedRequests.filter((r) => r.status === 'pending').length,
-    [receivedRequests]
-  );
-
-  const sentRequests = useMemo(
-    () => requests.filter((r) => r.senderUid === myUid),
-    [requests, myUid]
-  );
-
-  const visibleConversations = useMemo(
-    () =>
-      conversations.filter((c) => {
-        const otherUid = c.participantUids.find((id) => id !== myUid);
-        return !otherUid || !blockedUids.includes(otherUid);
-      }),
-    [conversations, myUid, blockedUids]
-  );
-
-  const activeConv =
-    visibleConversations.find((c) => c.id === selectedConvId) ?? visibleConversations[0] ?? null;
-
-  useEffect(() => {
-    if (activeTab === 'chats' && !selectedConvId && visibleConversations.length > 0) {
-      setSelectedConvId(visibleConversations[0].id);
-    }
-  }, [activeTab, selectedConvId, visibleConversations]);
-
-  const handleOpenSendModal = (profile: UserPublicProfile, explanation: string) => {
-    const check = canSendPeerRequest(myUid, profile, requests, blockedUids);
-    if (!check.allowed) {
-      showToast(check.reason || 'Unable to send request right now.');
-      return;
-    }
-    setRequestTarget({ profile, explanation });
-    setIntroMessage('');
-    setRequestError(null);
-    setCrisisDetectedNotice(false);
+  const handleRequestPeer = () => {
+    setRequestStatus('matching');
+    window.setTimeout(() => {
+      setRequestStatus('queued');
+      showToast('Peer request submitted! Expected match within 2-4 hours.');
+    }, 800);
   };
-
-  const handleConfirmSendRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!requestTarget) return;
-    const textToValidate = introMessage.trim() || 'Hi, I noticed we share some similar experiences and would be glad to talk when you have time.';
-    const mod = moderateUserContent(textToValidate);
-    if (!mod.allowed) {
-      setRequestError(mod.warningReason || 'Please adjust your message before sending.');
-      return;
-    }
-    setCrisisDetectedNotice(mod.isCrisisDetected);
-    setSendingRequest(true);
-    setRequestError(null);
-    try {
-      await onSendRequest(requestTarget.profile, textToValidate, requestTarget.explanation);
-      setRequestTarget(null);
-      setIntroMessage('');
-      showToast(`Conversation request sent to ${requestTarget.profile.displayName}.`);
-    } catch (err) {
-      setRequestError(err instanceof Error ? err.message : 'Unable to send request right now.');
-    } finally {
-      setSendingRequest(false);
-    }
-  };
-
-  const handleAccept = async (req: PeerConversationRequest) => {
-    if (!canTransitionRequestStatus(req.status, 'accepted', 'recipient')) return;
-    const createdConv = await onAcceptRequest(req);
-    showToast(`Connected with ${req.senderName}.`);
-    if (createdConv) {
-      setSelectedConvId(createdConv.id);
-      setActiveTab('chats');
-    }
-  };
-
-  const handleSendChatMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeConv || activeConv.status !== 'active') return;
-    const mod = moderateUserContent(messageDraft);
-    if (!mod.allowed) {
-      setMessageError(mod.warningReason || 'Please revise your message.');
-      return;
-    }
-    setCrisisDetectedNotice(mod.isCrisisDetected);
-    setMessageError(null);
-    setSendingMessage(true);
-    try {
-      await onSendMessage(activeConv, messageDraft.trim());
-      setMessageDraft('');
-    } catch (err) {
-      setMessageError(err instanceof Error ? err.message : 'Failed to send message.');
-    } finally {
-      setSendingMessage(false);
-    }
-  };
-
-  const handleSubmitReport = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reportTarget) return;
-    await onReportContent({
-      targetType: reportTarget.targetType,
-      targetId: reportTarget.targetId,
-      targetUid: reportTarget.targetUid,
-      reason: reportReason,
-      details: reportDetails.trim() || undefined,
-    });
-    setReportTarget(null);
-    setReportDetails('');
-    showToast('Confidential report recorded. Thank you for helping keep SHONGI safe.');
-  };
-
-  const popularFilterTags = useMemo(() => {
-    const combined = Array.from(
-      new Set([...myProfile.statusTags, ...myProfile.interests, ...ALL_STATUS_TAGS.slice(0, 6), ...INTEREST_TAGS.slice(0, 4)])
-    );
-    return combined.slice(0, 12);
-  }, [myProfile.statusTags, myProfile.interests]);
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 space-y-6">
-      {/* Header Banner */}
-      <div className="rounded-2xl bg-surface-container-low p-6 lg:p-7 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[11px] font-semibold uppercase tracking-wider">
-              Find Your People
-            </span>
-            <span className="text-[12px] text-on-surface-variant bangla-text">
-              একই পথের সহযাত্রী খুঁজুন
-            </span>
-          </div>
-          <h1 className="text-[24px] font-semibold text-primary">
-            People You May Relate To
-          </h1>
-          <p className="text-[14px] text-on-surface-variant max-w-3xl leading-[1.6]">
-            Discover others based on shared experiences, student life, career questions, or interests
-            you choose to share. Connections only open after both sides accept—never random, and not
-            a replacement for clinical therapy.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => onNavigate('privacy-memory-hub')}
-            className="px-4 py-2.5 rounded-xl bg-primary text-on-primary text-[13px] font-medium hover:bg-primary-container transition-colors"
-          >
-            Edit My Tags ({myProfile.statusTags.length + myProfile.interests.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setGuidelinesOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-surface text-primary text-[13px] font-medium border border-outline-variant/40 hover:bg-surface-container-high transition-colors"
-          >
-            Safety Code
-          </button>
-        </div>
-      </div>
-
-      {/* Gentle Crisis Support Banner when crisis keywords are typed */}
-      {crisisDetectedNotice && (
-        <div className="p-4 rounded-2xl bg-secondary-fixed/50 border border-secondary/30 flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <p className="text-[14px] font-semibold text-on-secondary-fixed">
-              You don&apos;t have to carry something this heavy alone.
-            </p>
-            <p className="text-[13px] text-on-secondary-fixed-variant leading-[1.6]">
-              If you&apos;re feeling overwhelmed or unsafe right now, Kaan Pete Roi (09612-119911)
-              and National Emergency Service (999) are available for immediate support.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onNavigate('crisis-resources')}
-            className="px-4 py-2 rounded-xl bg-secondary text-on-secondary text-[12px] font-semibold hover:bg-on-secondary-fixed-variant"
-          >
-            View BD Helplines
-          </button>
-        </div>
-      )}
-
-      {/* Sub-navigation Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-outline-variant/30 pb-3">
-        {(
-          [
-            { id: 'discover', label: 'Discover People', count: recommendations.length },
-            { id: 'received', label: 'Received Requests', count: pendingReceivedCount },
-            { id: 'sent', label: 'Sent Requests', count: sentRequests.filter((r) => r.status === 'pending').length },
-            { id: 'chats', label: 'Active Conversations', count: visibleConversations.filter((c) => c.status === 'active').length },
-          ] as Array<{ id: PeerTab; label: string; count: number }>
-        ).map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              data-testid={`peer-tab-${tab.id}`}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-xl text-[13px] font-medium transition-all flex items-center gap-2 ${
-                isActive
-                  ? 'bg-primary text-on-primary shadow-xs'
-                  : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-              }`}
-            >
-              <span>{tab.label}</span>
-              {tab.count > 0 && (
+    <div className="flex flex-col w-full">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8 space-y-8">
+        {/* Top Notice / Boundary Banner */}
+        <div className="relative overflow-hidden rounded-2xl bg-surface-container-low p-6 lg:p-7 shadow-sm">
+          <div className="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-secondary-fixed/30 blur-2xl pointer-events-none" />
+          <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-secondary-fixed flex items-center justify-center shrink-0 text-on-secondary-fixed shadow-sm">
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${
-                    isActive
-                      ? 'bg-surface/20 text-on-primary'
-                      : 'bg-surface-container-highest text-primary'
-                  }`}
+                  className="material-symbols-outlined text-2xl"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
                 >
-                  {tab.count}
+                  verified_user
                 </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* TAB 1: DISCOVER PEOPLE */}
-      {activeTab === 'discover' && (
-        <div className="space-y-6">
-          {myProfile.statusTags.length === 0 && myProfile.interests.length === 0 && (
-            <div className="p-4 rounded-2xl bg-secondary-fixed/40 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[13px] text-on-secondary-fixed leading-[1.6]">
-                Select a few optional status tags or interests in your profile so SHONGI can explain
-                why someone relates to your situation.
-              </p>
-              <button
-                type="button"
-                onClick={() => onNavigate('privacy-memory-hub')}
-                className="px-3.5 py-1.5 rounded-lg bg-primary text-on-primary text-[12px] font-semibold"
-              >
-                Choose My Tags
-              </button>
-            </div>
-          )}
-
-          {/* Filter pills */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] font-medium text-on-surface-variant mr-1">Filter by:</span>
-            <button
-              type="button"
-              onClick={() => setFilterTag('')}
-              className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
-                filterTag === ''
-                  ? 'bg-primary text-on-primary'
-                  : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-              }`}
-            >
-              Best Matches
-            </button>
-            {popularFilterTags.map((tag) => {
-              const active = filterTag === tag;
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => setFilterTag((prev) => (prev === tag ? '' : tag))}
-                  className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
-                    active
-                      ? 'bg-primary text-on-primary'
-                      : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-                  }`}
-                >
-                  {tag}
-                </button>
-              );
-            })}
-          </div>
-
-          {recommendations.length === 0 ? (
-            <div className="rounded-2xl bg-surface-container-lowest p-10 text-center space-y-3 shadow-xs">
-              <p className="text-[16px] font-medium text-primary">
-                No matching peers found for this filter right now.
-              </p>
-              <p className="text-[13px] text-on-surface-variant max-w-md mx-auto leading-[1.6]">
-                Try clearing the filter or adding more interests in your profile. Remember, you can
-                also talk with SHONGI Companion or reflect in the Community Feed anytime.
-              </p>
-              {filterTag && (
-                <button
-                  type="button"
-                  onClick={() => setFilterTag('')}
-                  className="px-4 py-2 rounded-xl bg-primary text-on-primary text-[13px] font-medium"
-                >
-                  Show All Available Peers
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {recommendations.map((rec) => {
-                const { profile, sharedStatusTags, sharedInterests, explanation } = rec;
-                const availMeta = AVAILABILITY_META[profile.availability];
-                const existingPairReq = requests.find(
-                  (r) =>
-                    ((r.senderUid === myUid && r.recipientUid === profile.uid) ||
-                      (r.senderUid === profile.uid && r.recipientUid === myUid)) &&
-                    (r.status === 'pending' || r.status === 'accepted')
-                );
-
-                return (
-                  <div
-                    key={profile.uid}
-                    data-testid={`peer-card-${profile.uid}`}
-                    className="rounded-2xl bg-surface-container-lowest p-6 shadow-xs border border-outline-variant/25 flex flex-col justify-between gap-5"
-                  >
-                    <div className="space-y-4">
-                      {/* Header */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3.5">
-                          <div className="relative">
-                            <div
-                              className={`w-12 h-12 rounded-2xl flex items-center justify-center text-[16px] font-semibold ${getAvatarToneClass(
-                                profile.avatarTone
-                              )}`}
-                            >
-                              {profile.avatarInitials}
-                            </div>
-                            {profile.showOnlineStatus && profile.isOnline && (
-                              <span
-                                title="Online now"
-                                className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#2F6F63] border-2 border-white"
-                              />
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-[17px] font-semibold text-primary">
-                                {profile.displayName}
-                              </h3>
-                              {profile.isDemo ? (
-                                <span className="px-2 py-0.5 rounded-md bg-surface-container text-[11px] font-medium text-on-surface-variant">
-                                  Sample Profile (Preview)
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded-md bg-[#2F6F63]/10 text-[11px] font-medium text-[#2F6F63]">
-                                  Community Member
-                                </span>
-                              )}
-                            </div>
-                            <span
-                              className={`inline-block mt-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium ${availMeta.badgeClass}`}
-                            >
-                              {availMeta.label}
-                            </span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setReportTarget({
-                              targetType: 'user',
-                              targetId: profile.uid,
-                              targetUid: profile.uid,
-                              label: profile.displayName,
-                            })
-                          }
-                          aria-label={`Report ${profile.displayName}`}
-                          className="p-1.5 rounded-lg text-on-surface-variant hover:text-secondary hover:bg-surface-container"
-                          title="Report profile"
-                        >
-                          <span className="material-symbols-outlined text-lg">flag</span>
-                        </button>
-                      </div>
-
-                      {/* Transparent Match Explanation */}
-                      <div className="p-3 rounded-xl bg-[#2F6F63]/8 border border-[#2F6F63]/20 text-[13px] text-[#2F6F63] font-medium flex items-start gap-2">
-                        <span className="material-symbols-outlined text-base mt-0.5 shrink-0">
-                          diversity_3
-                        </span>
-                        <span>{explanation}</span>
-                      </div>
-
-                      {/* Bio */}
-                      {profile.bio && (
-                        <p className="text-[14px] text-on-surface-variant leading-[1.6]">
-                          {profile.bio}
-                        </p>
-                      )}
-
-                      {/* Tags */}
-                      <div className="flex flex-wrap gap-1.5">
-                        {profile.statusTags.map((tag) => {
-                          const isShared = sharedStatusTags.includes(tag);
-                          return (
-                            <span
-                              key={tag}
-                              className={`px-2.5 py-1 rounded-full text-[11px] font-medium ${
-                                isShared
-                                  ? 'bg-[#2F6F63] text-white'
-                                  : 'bg-surface-container text-primary'
-                              }`}
-                            >
-                              {tag}
-                            </span>
-                          );
-                        })}
-                        {profile.interests.map((interest) => {
-                          const isShared = sharedInterests.includes(interest);
-                          return (
-                            <span
-                              key={interest}
-                              className={`px-2.5 py-1 rounded-full text-[11px] font-medium ${
-                                isShared
-                                  ? 'bg-[#C97B5A] text-white'
-                                  : 'bg-surface-container-low text-on-surface-variant'
-                              }`}
-                            >
-                              {interest}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Card Footer */}
-                    <div className="pt-3 border-t border-outline-variant/20 flex items-center justify-between gap-3">
-                      {existingPairReq?.status === 'accepted' ? (
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('chats')}
-                          className="w-full py-2.5 px-4 rounded-xl bg-tertiary-fixed text-on-tertiary-fixed text-[13px] font-semibold hover:opacity-90"
-                        >
-                          Connected • Open Chat
-                        </button>
-                      ) : existingPairReq?.status === 'pending' ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setActiveTab(
-                              existingPairReq.senderUid === myUid ? 'sent' : 'received'
-                            )
-                          }
-                          className="w-full py-2.5 px-4 rounded-xl bg-surface-container text-on-surface-variant text-[13px] font-medium"
-                        >
-                          {existingPairReq.senderUid === myUid
-                            ? 'Request Pending • View in Sent'
-                            : 'Sent You a Request • View in Received'}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          data-testid={`send-request-btn-${profile.uid}`}
-                          onClick={() => handleOpenSendModal(profile, explanation)}
-                          className="w-full py-2.5 px-4 rounded-xl bg-primary text-on-primary text-[13px] font-semibold hover:bg-primary-container transition-colors"
-                        >
-                          Send Request
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB 2: RECEIVED REQUESTS */}
-      {activeTab === 'received' && (
-        <div className="space-y-4">
-          {receivedRequests.length === 0 ? (
-            <div className="rounded-2xl bg-surface-container-lowest p-10 text-center space-y-2 shadow-xs">
-              <p className="text-[16px] font-medium text-primary">No received requests yet.</p>
-              <p className="text-[13px] text-on-surface-variant">
-                When someone relates to your tags and sends an introduction, you can accept,
-                decline, or ignore it here.
-              </p>
-            </div>
-          ) : (
-            receivedRequests.map((req) => (
-              <div
-                key={req.id}
-                className="rounded-2xl bg-surface-container-lowest p-6 shadow-xs border border-outline-variant/25 space-y-4"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <h3 className="text-[17px] font-semibold text-primary">{req.senderName}</h3>
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-secondary-fixed text-on-secondary-fixed capitalize">
-                        {req.status}
-                      </span>
-                    </div>
-                    <p className="text-[12px] text-[#2F6F63] mt-1">{req.sharedContextSummary}</p>
-                  </div>
-                  <span className="text-[11px] text-on-surface-variant">
-                    {new Date(req.createdAtMs).toLocaleString()}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[11px] font-semibold uppercase tracking-wider">
+                    Pilot Phase 01
+                  </span>
+                  <span className="text-[18px] font-semibold text-primary bangla-text">
+                    Vetted Peer Matching • ভর্তি পরীক্ষা ও মানসিক ভারসাম্য
                   </span>
                 </div>
-
-                {req.introMessage && (
-                  <div className="p-4 rounded-xl bg-surface-container-low text-[14px] text-on-surface leading-[1.6]">
-                    &ldquo;{req.introMessage}&rdquo;
-                  </div>
-                )}
-
-                {req.status === 'pending' && (
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => void handleAccept(req)}
-                      className="px-4 py-2 rounded-xl bg-[#2F6F63] text-white text-[13px] font-semibold hover:bg-[#24594f]"
-                    >
-                      Accept &amp; Start Conversation
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void onDeclineRequest(req);
-                        showToast('Request declined.');
-                      }}
-                      className="px-4 py-2 rounded-xl bg-surface-container text-primary text-[13px] font-medium hover:bg-surface-container-high"
-                    >
-                      Decline
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void onIgnoreRequest(req);
-                        showToast('Request dismissed.');
-                      }}
-                      className="px-4 py-2 rounded-xl bg-surface text-on-surface-variant text-[13px] hover:bg-surface-container-low"
-                    >
-                      Ignore
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void onBlockUser(req.senderUid, req.senderName, req);
-                        showToast(`${req.senderName} has been blocked.`);
-                      }}
-                      className="px-3.5 py-2 rounded-xl text-secondary text-[12px] font-semibold hover:bg-secondary-fixed/40 ml-auto"
-                    >
-                      Block Sender
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* TAB 3: SENT REQUESTS */}
-      {activeTab === 'sent' && (
-        <div className="space-y-4">
-          {sentRequests.length === 0 ? (
-            <div className="rounded-2xl bg-surface-container-lowest p-10 text-center space-y-3 shadow-xs">
-              <p className="text-[16px] font-medium text-primary">No sent requests yet.</p>
-              <button
-                type="button"
-                onClick={() => setActiveTab('discover')}
-                className="px-4 py-2 rounded-xl bg-primary text-on-primary text-[13px] font-medium"
-              >
-                Browse Discover People
-              </button>
-            </div>
-          ) : (
-            sentRequests.map((req) => (
-              <div
-                key={req.id}
-                data-testid={`sent-request-${req.recipientUid}`}
-                className="rounded-2xl bg-surface-container-lowest p-5 shadow-xs border border-outline-variant/25 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-[16px] font-semibold text-primary">{req.recipientName}</h3>
-                    {req.isDemoTarget && (
-                      <span className="px-2 py-0.5 rounded-md bg-surface-container text-[11px] text-on-surface-variant">
-                        Sample Profile Preview
-                      </span>
-                    )}
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize ${
-                        req.status === 'accepted'
-                          ? 'bg-[#2F6F63]/15 text-[#2F6F63]'
-                          : req.status === 'pending'
-                          ? 'bg-secondary-fixed text-on-secondary-fixed'
-                          : 'bg-surface-container text-on-surface-variant'
-                      }`}
-                    >
-                      {req.status}
-                    </span>
-                  </div>
-                  <p className="text-[12px] text-on-surface-variant">{req.sharedContextSummary}</p>
-                  {req.introMessage && (
-                    <p className="text-[13px] text-on-surface italic">&ldquo;{req.introMessage}&rdquo;</p>
-                  )}
-                </div>
-
-                {req.status === 'pending' && (
-                  <button
-                    type="button"
-                    data-testid={`cancel-request-${req.recipientUid}`}
-                    onClick={() => {
-                      void onCancelRequest(req);
-                      showToast('Pending request cancelled.');
-                    }}
-                    className="px-4 py-2 rounded-xl border border-secondary/40 text-secondary text-[12px] font-semibold hover:bg-secondary/10 shrink-0"
-                  >
-                    Cancel Request
-                  </button>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* TAB 4: ACTIVE CONVERSATIONS */}
-      {activeTab === 'chats' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Conversation list */}
-          <div className="lg:col-span-4 space-y-3">
-            {visibleConversations.length === 0 ? (
-              <div className="rounded-2xl bg-surface-container-lowest p-6 text-center space-y-2 shadow-xs">
-                <p className="text-[15px] font-medium text-primary">No active chats yet.</p>
-                <p className="text-[13px] text-on-surface-variant leading-[1.6]">
-                  Conversations begin only after a peer request is accepted.
+                <p className="text-[15px] text-on-surface-variant max-w-3xl leading-relaxed">
+                  100% of first-contact messages are human-reviewed before delivery to guarantee
+                  emotional safety and mutual respect. Supporters are peers with lived experience,{' '}
+                  <strong className="text-on-surface font-medium">
+                    not licensed therapists or medical professionals
+                  </strong>
+                  .
                 </p>
               </div>
-            ) : (
-              visibleConversations.map((conv) => {
-                const otherUid = conv.participantUids.find((id) => id !== myUid) ?? '';
-                const otherName = conv.participantNames[otherUid] ?? 'Peer Connection';
-                const isSelected = activeConv?.id === conv.id;
-                return (
-                  <button
-                    key={conv.id}
-                    type="button"
-                    onClick={() => setSelectedConvId(conv.id)}
-                    className={`w-full text-left p-4 rounded-2xl border transition-all ${
-                      isSelected
-                        ? 'bg-primary text-on-primary border-primary'
-                        : 'bg-surface-container-lowest border-outline-variant/25 hover:bg-surface-container-low'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[15px] font-semibold truncate">{otherName}</span>
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium capitalize ${
-                          conv.status === 'active'
-                            ? isSelected
-                              ? 'bg-white/20 text-white'
-                              : 'bg-[#2F6F63]/15 text-[#2F6F63]'
-                            : 'bg-surface-container-highest text-on-surface-variant'
-                        }`}
-                      >
-                        {conv.status}
-                      </span>
-                    </div>
-                    {conv.lastMessagePreview && (
-                      <p
-                        className={`text-[12px] mt-1 truncate ${
-                          isSelected ? 'text-on-primary/80' : 'text-on-surface-variant'
-                        }`}
-                      >
-                        {conv.lastMessagePreview}
-                      </p>
-                    )}
-                  </button>
-                );
-              })
-            )}
-          </div>
+            </div>
 
-          {/* Active Chat Pane */}
-          <div className="lg:col-span-8">
-            {!activeConv ? (
-              <div className="rounded-2xl bg-surface-container-lowest p-10 text-center text-[14px] text-on-surface-variant shadow-xs">
-                Select a conversation on the left or accept a peer request to begin talking.
-              </div>
-            ) : (
-              (() => {
-                const otherUid = activeConv.participantUids.find((id) => id !== myUid) ?? '';
-                const otherName = activeConv.participantNames[otherUid] ?? 'Peer Connection';
-                const chatMessages = activeMessagesByConvId[activeConv.id] ?? [];
-
-                return (
-                  <div className="rounded-2xl bg-surface-container-lowest shadow-xs border border-outline-variant/25 flex flex-col min-h-[460px]">
-                    {/* Top chat bar */}
-                    <div className="p-5 border-b border-outline-variant/25 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-[17px] font-semibold text-primary">{otherName}</h3>
-                        <p className="text-[12px] text-on-surface-variant">
-                          Peer conversation • Do not share phone numbers, addresses, or financial details
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setReportTarget({
-                              targetType: 'conversation',
-                              targetId: activeConv.id,
-                              targetUid: otherUid,
-                              label: otherName,
-                            })
-                          }
-                          className="px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant text-[12px] font-medium hover:text-secondary"
-                        >
-                          Report
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void onBlockUser(otherUid, otherName, undefined, activeConv);
-                            showToast(`${otherName} blocked and conversation ended.`);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-secondary/10 text-secondary text-[12px] font-semibold hover:bg-secondary/20"
-                        >
-                          Block User
-                        </button>
-                        {activeConv.status === 'active' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void onEndConversation(activeConv);
-                              showToast('Conversation ended.');
-                            }}
-                            className="px-3 py-1.5 rounded-lg border border-outline-variant/40 text-[12px] font-medium text-on-surface-variant hover:text-primary"
-                          >
-                            Leave Conversation
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Messages */}
-                    <div className="flex-1 p-5 space-y-3 max-h-[380px] overflow-y-auto bg-surface/40">
-                      {chatMessages.length === 0 ? (
-                        <p className="text-center text-[13px] text-on-surface-variant py-8">
-                          You are connected with {otherName}. Say hello gently whenever you are ready.
-                        </p>
-                      ) : (
-                        chatMessages.map((msg) => {
-                          const isMine = msg.senderUid === myUid;
-                          return (
-                            <div
-                              key={msg.id}
-                              className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
-                            >
-                              <div
-                                className={`max-w-[80%] px-4 py-3 rounded-2xl text-[14px] leading-[1.6] ${
-                                  isMine
-                                    ? 'bg-primary text-on-primary'
-                                    : 'bg-surface-container-low text-on-surface'
-                                }`}
-                              >
-                                <p>{msg.text}</p>
-                              </div>
-                              <span className="text-[11px] text-on-surface-variant mt-1 px-1">
-                                {isMine ? 'You' : msg.senderName} •{' '}
-                                {new Date(msg.createdAtMs).toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </span>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-
-                    {/* Composer */}
-                    {activeConv.status === 'active' ? (
-                      <form
-                        onSubmit={handleSendChatMessage}
-                        className="p-4 border-t border-outline-variant/25 space-y-2"
-                      >
-                        {messageError && (
-                          <p className="text-[12px] text-secondary font-medium">{messageError}</p>
-                        )}
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={messageDraft}
-                            onChange={(e) => setMessageDraft(e.target.value)}
-                            placeholder={`Write a supportive message to ${otherName}...`}
-                            className="flex-1 px-4 py-2.5 rounded-xl bg-surface-container-low text-[14px] text-on-surface outline-none focus:bg-surface-container"
-                          />
-                          <button
-                            type="submit"
-                            disabled={!messageDraft.trim() || sendingMessage}
-                            className="px-5 py-2.5 rounded-xl bg-primary text-on-primary text-[13px] font-semibold hover:bg-primary-container disabled:opacity-50"
-                          >
-                            {sendingMessage ? 'Sending...' : 'Send'}
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="p-4 border-t border-outline-variant/25 text-center text-[13px] text-on-surface-variant">
-                        This conversation has been ended.
-                      </div>
-                    )}
-                  </div>
-                );
-              })()
-            )}
+            <button
+              type="button"
+              onClick={() => setGuidelinesOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-surface text-primary text-[14px] font-medium shadow-sm hover:bg-surface-container-high transition-colors flex items-center gap-2 shrink-0"
+            >
+              <span className="material-symbols-outlined text-lg text-secondary">policy</span>
+              <span>Safety Code</span>
+            </button>
           </div>
         </div>
-      )}
 
-      {/* Modal: Send Conversation Request */}
-      {requestTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/40 backdrop-blur-xs">
-          <form
-            onSubmit={handleConfirmSendRequest}
-            className="bg-surface-container-lowest max-w-md w-full rounded-2xl p-6 space-y-4 shadow-xl"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
+        {/* Main Workspace: Asymmetric 2-Column Bento */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Column: Active Match Card (7 cols) */}
+          <div className="lg:col-span-7 space-y-6">
+            <div className="flex items-center justify-between px-1">
+              <div className="space-y-0.5">
+                <span className="text-[11px] font-semibold text-secondary uppercase tracking-widest block">
+                  Active Bridge
+                </span>
+                <h2 className="text-[22px] font-semibold text-primary">Matched Peer Session</h2>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed text-[11px] font-semibold flex items-center gap-1.5 shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-tertiary-container animate-ping" />
+                {connectionEnded ? 'Session Closed Safely' : 'Session Encrypted'}
+              </span>
+            </div>
+
+            {connectionEnded ? (
+              <div className="rounded-2xl bg-surface-container-lowest p-8 shadow-sm space-y-4 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-surface-container mx-auto flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined text-2xl">check_circle</span>
+                </div>
                 <h3 className="text-[18px] font-semibold text-primary">
-                  Send Request to {requestTarget.profile.displayName}
+                  Peer Connection Closed &amp; Purged
                 </h3>
-                <p className="text-[12px] text-[#2F6F63] mt-1">{requestTarget.explanation}</p>
+                <p className="text-[14px] text-on-surface-variant max-w-md mx-auto">
+                  All draft introductions have been cleared from your local screen. You can request a
+                  different supporter on the right whenever you feel ready.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setConnectionEnded(false)}
+                  className="px-4 py-2 rounded-xl bg-surface-container text-primary text-[13px] font-semibold hover:bg-surface-container-high"
+                >
+                  Restore Session Preview
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setRequestTarget(null)}
-                className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant"
-              >
-                ✕
-              </button>
-            </div>
+            ) : (
+              <div className="rounded-2xl bg-surface-container-lowest p-6 lg:p-8 shadow-sm space-y-6">
+                {/* Identity Strip */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 bg-surface-container-low rounded-xl p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <div className="w-16 h-16 rounded-2xl bg-primary-container text-on-primary-container flex items-center justify-center text-[22px] font-semibold shadow-inner bangla-text">
+                        ত
+                      </div>
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-surface-container-lowest flex items-center justify-center shadow-xs">
+                        <span className="w-3.5 h-3.5 rounded-full bg-tertiary-container" />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-[18px] font-semibold text-primary">Tanvir</h3>
+                        <span className="px-2 py-0.5 rounded-md bg-surface text-on-surface-variant text-[11px] font-semibold">
+                          Anonymous Display
+                        </span>
+                      </div>
+                      <p className="text-[13px] text-on-surface-variant">
+                        Dhaka University Alumnus • 2nd-Time Admission Survivor
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <span className="text-[11px] text-on-surface-variant block">
+                      Response Time
+                    </span>
+                    <span className="text-[18px] font-semibold text-secondary tabular-nums">
+                      ~2.5 Hours
+                    </span>
+                  </div>
+                </div>
 
-            {requestTarget.profile.isDemo && (
-              <div className="p-3 rounded-xl bg-surface-container text-[12px] text-on-surface-variant leading-[1.5]">
-                This is a <strong>Sample Profile (Preview)</strong> so you can experience how SHONGI
-                peer requests work. Real community members also appear here as they join.
+                {/* Lived Experience Story Teaser */}
+                <div className="p-4 rounded-xl bg-surface-container-low text-on-surface space-y-2">
+                  <div className="flex items-center gap-2 text-secondary">
+                    <span className="material-symbols-outlined text-lg">format_quote</span>
+                    <span className="text-[12px] font-semibold text-secondary">
+                      Supporter&apos;s Reflection
+                    </span>
+                  </div>
+                  <p className="text-[15px] text-on-surface-variant italic leading-relaxed bangla-text">
+                    &ldquo;আমি প্রথমবার বুয়েট আর ঢাবিতে পাইনি। পরিবারের হতাশা, আত্মীয়দের
+                    কটাক্ষ—সবই পার করেছি। ১ বছর ড্রপ দিয়ে ঘুরে দাঁড়ানোর পথটা নিঃসঙ্গ ছিল। আপনার
+                    অনুভূতি সম্পূর্ণ স্বাভাবিক।&rdquo;
+                  </p>
+                </div>
+
+                {/* Tags Cloud */}
+                <div className="space-y-2">
+                  <span className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider block">
+                    Shared Context &amp; Domain
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1.5 rounded-full bg-surface-container text-primary text-[12px] font-medium flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base text-secondary">
+                        school
+                      </span>
+                      Engineering Prep
+                    </span>
+                    <span className="px-3 py-1.5 rounded-full bg-surface-container text-primary text-[12px] font-medium flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base text-secondary">
+                        history
+                      </span>
+                      Gap Year Experience
+                    </span>
+                    <span className="px-3 py-1.5 rounded-full bg-surface-container text-primary text-[12px] font-medium flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base text-secondary">
+                        location_on
+                      </span>
+                      Dhaka
+                    </span>
+                    <span className="px-3 py-1.5 rounded-full bg-surface-container text-primary text-[12px] font-medium flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base text-secondary">
+                        translate
+                      </span>
+                      Bangla &amp; English
+                    </span>
+                  </div>
+                </div>
+
+                {/* Status Indicator Pill / Review Pending */}
+                <div className="p-5 rounded-2xl bg-secondary-fixed/40 text-on-secondary-fixed space-y-2.5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-lg animate-spin">sync</span>
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-[18px] font-semibold text-on-secondary-fixed leading-tight">
+                        Human Review Pending on Introduction Message
+                      </h4>
+                      <p className="text-[13px] text-on-secondary-fixed-variant leading-snug">
+                        Estimated review time: <strong>~45 mins</strong> (Active moderation team:
+                        10:00 AM – 10:00 PM BST). First messages are audited to prevent sharing
+                        contact details or non-consensual advice.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="w-full bg-surface-container-lowest rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-secondary h-1.5 rounded-full w-[65%]" />
+                  </div>
+                  <div className="flex justify-between items-center text-[11px] font-semibold text-on-secondary-fixed-variant pt-0.5">
+                    <span>Submitted 12 mins ago</span>
+                    <span>Audit Queue #4</span>
+                  </div>
+                </div>
+
+                {/* Message Exchange Preview Box */}
+                <div className="p-5 rounded-xl bg-surface-container space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] text-on-surface-variant font-medium">
+                      Draft Introductions
+                    </span>
+                    <span className="text-[11px] text-on-surface-variant flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">lock</span> Read-only
+                      until approved
+                    </span>
+                  </div>
+                  <div className="p-4 rounded-xl bg-surface-container-lowest shadow-sm space-y-1">
+                    <div className="flex items-center justify-between text-xs text-on-surface-variant mb-1">
+                      <span className="font-medium text-primary">You (Anisur)</span>
+                      <span>Today, 3:15 PM</span>
+                    </div>
+                    <p className="text-[15px] text-on-surface leading-relaxed bangla-text">
+                      &ldquo;ভাইয়া, সেকেন্ড টাইম প্রিপারেশন নিচ্ছি। বাড়ির সবাই আশা ছেড়ে দিয়েছে।
+                      সারাদিন পড়ার টেবিলে বসে থাকলে দমবন্ধ লাগে। কী করব বুঝতে পারছি না...&rdquo;
+                    </p>
+                  </div>
+                </div>
+
+                {/* Safety & Boundary Protocol */}
+                <div className="p-5 rounded-2xl bg-surface-container-low space-y-3">
+                  <div className="flex items-center gap-2 text-primary">
+                    <span className="material-symbols-outlined text-xl text-tertiary-container">
+                      shield_with_heart
+                    </span>
+                    <span className="text-[18px] font-semibold text-primary">
+                      Safety &amp; Boundary Protocol
+                    </span>
+                  </div>
+                  <p className="text-[13px] text-on-surface-variant leading-relaxed">
+                    Remember:{' '}
+                    <strong>
+                      Do not share personal phone numbers, bKash/Nagad accounts, or National IDs
+                    </strong>
+                    . Peer supporters offer empathy and perspective, not professional therapy or
+                    financial assistance.
+                  </p>
+                  <div className="pt-2 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEndModalOpen(true)}
+                      className="px-4 py-2 rounded-xl bg-surface-container-highest text-secondary text-[12px] font-medium hover:bg-error-container hover:text-on-error-container transition-colors flex items-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-base">block</span>
+                      Block &amp; End Connection
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportModalOpen(true)}
+                      className="px-4 py-2 rounded-xl bg-surface-container text-on-surface-variant text-[12px] font-medium hover:bg-secondary-fixed hover:text-on-secondary-fixed transition-colors flex items-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-base text-secondary">
+                        flag
+                      </span>
+                      Report Supporter
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
-            <div>
-              <label htmlFor="peer-intro-msg" className="block text-[12px] font-medium text-primary mb-1.5">
-                Optional short introduction
-              </label>
-              <textarea
-                id="peer-intro-msg"
-                rows={3}
-                maxLength={500}
-                value={introMessage}
-                onChange={(e) => setIntroMessage(e.target.value)}
-                placeholder="e.g., Hi! I noticed we're both navigating exam pressure right now and wanted to say hello."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container-low text-[14px] text-on-surface outline-none focus:bg-surface-container leading-[1.6]"
-              />
+            {/* Inline Visual: Peer Process Micro-Visualization */}
+            <div className="p-6 rounded-2xl bg-surface-container-lowest shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[18px] font-semibold text-primary">
+                  Peer Verification Pipeline
+                </span>
+                <span className="text-[11px] font-semibold text-on-surface-variant">
+                  Confidential • Zero Log
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                <div className="p-3.5 rounded-xl bg-surface-container-low flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="w-6 h-6 rounded-full bg-primary-container text-on-primary-container text-xs flex items-center justify-center font-bold">
+                      1
+                    </span>
+                    <span className="material-symbols-outlined text-sm text-tertiary-container">
+                      done
+                    </span>
+                  </div>
+                  <span className="text-[12px] text-primary font-semibold">
+                    Matched on Stresses
+                  </span>
+                  <p className="text-[13px] text-on-surface-variant mt-1">
+                    Matched with senior from same track.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-secondary-fixed/50 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="w-6 h-6 rounded-full bg-secondary text-on-secondary text-xs flex items-center justify-center font-bold">
+                      2
+                    </span>
+                    <span className="material-symbols-outlined text-sm text-secondary animate-pulse">
+                      hourglass_top
+                    </span>
+                  </div>
+                  <span className="text-[12px] text-on-secondary-fixed font-semibold">
+                    Human Review
+                  </span>
+                  <p className="text-[13px] text-on-secondary-fixed-variant mt-1">
+                    Intro safety screen in progress.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-surface-container-low flex flex-col justify-between opacity-60">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="w-6 h-6 rounded-full bg-surface-container-highest text-on-surface-variant text-xs flex items-center justify-center font-bold">
+                      3
+                    </span>
+                    <span className="material-symbols-outlined text-sm text-on-surface-variant">
+                      lock_open
+                    </span>
+                  </div>
+                  <span className="text-[12px] text-primary font-semibold">Live Async Chat</span>
+                  <p className="text-[13px] text-on-surface-variant mt-1">
+                    Direct safe messaging opened.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Request Card, Topics & Peer Directory (5 cols) */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className="flex items-center justify-between px-1">
+              <div className="space-y-0.5">
+                <span className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-widest block">
+                  New Request
+                </span>
+                <h2 className="text-[22px] font-semibold text-primary">Academic Transitions</h2>
+              </div>
+              <span className="text-[11px] font-semibold text-secondary">Voluntary Network</span>
             </div>
 
-            {requestError && (
-              <p className="text-[12px] text-secondary font-medium">{requestError}</p>
-            )}
+            {/* Request New Peer Match Card */}
+            <div className="rounded-2xl bg-surface-container-lowest p-6 lg:p-7 shadow-sm space-y-6">
+              <div className="space-y-2">
+                <h3 className="text-[18px] font-semibold text-primary">Request a New Supporter</h3>
+                <p className="text-[13px] text-on-surface-variant leading-relaxed">
+                  Facing distinct challenges? Select your core pressure point to match with a
+                  vetted alumnus who experienced the same.
+                </p>
+              </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={sendingRequest}
-                data-testid="confirm-send-request-btn"
-                className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary text-[13px] font-semibold hover:bg-primary-container disabled:opacity-60"
-              >
-                {sendingRequest ? 'Sending...' : 'Send Conversation Request'}
-              </button>
+              <div className="space-y-3">
+                <span className="block text-[12px] text-primary font-medium bangla-text">
+                  Select Primary Context / সমস্যা নির্বাচন করুন
+                </span>
+
+                {ACADEMIC_TOPICS.map((topic) => {
+                  const checked = selectedTopic === topic.id;
+                  return (
+                    <label
+                      key={topic.id}
+                      className={`flex items-start gap-3.5 p-3.5 rounded-xl cursor-pointer transition-all ${
+                        checked
+                          ? 'bg-surface-container hover:bg-surface-container-high'
+                          : 'bg-surface-container-low hover:bg-surface-container'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="academic-topic"
+                        value={topic.id}
+                        checked={checked}
+                        onChange={() => setSelectedTopic(topic.id)}
+                        className="mt-1 accent-tertiary-container"
+                      />
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[14px] text-primary font-semibold">
+                            {topic.title}
+                          </span>
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant bangla-text shrink-0">
+                            {topic.banglaTag}
+                          </span>
+                        </div>
+                        <p className="text-[13px] text-on-surface-variant">{topic.description}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="p-4 rounded-xl bg-surface-container-low space-y-2">
+                <div className="flex items-center gap-2 text-primary text-[12px] font-semibold">
+                  <span className="material-symbols-outlined text-base text-secondary">schedule</span>
+                  <span>Expectation Agreement</span>
+                </div>
+                <p className="text-[13px] text-on-surface-variant leading-relaxed">
+                  Supporters volunteer their lived experience asynchronously. Average response time:{' '}
+                  <strong>2–4 hours</strong>. There are no 24/7 immediate crisis guarantees.
+                </p>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setRequestTarget(null)}
-                className="px-4 py-2.5 rounded-xl bg-surface-container text-on-surface text-[13px]"
+                disabled={requestStatus === 'matching'}
+                onClick={handleRequestPeer}
+                className="w-full py-3.5 px-4 rounded-xl bg-primary text-on-primary text-[14px] font-semibold hover:bg-primary-container transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-75"
               >
-                Cancel
+                <span
+                  className={`material-symbols-outlined text-lg ${
+                    requestStatus === 'matching' ? 'animate-spin' : ''
+                  }`}
+                >
+                  {requestStatus === 'matching'
+                    ? 'refresh'
+                    : requestStatus === 'queued'
+                    ? 'check'
+                    : 'person_add'}
+                </span>
+                <span>
+                  {requestStatus === 'matching'
+                    ? 'Matching Peer...'
+                    : requestStatus === 'queued'
+                    ? 'Request In Queue'
+                    : 'Request New Peer Supporter'}
+                </span>
               </button>
             </div>
-          </form>
+
+            {/* Available Peer Supporters Directory */}
+            <div className="rounded-2xl bg-surface-container-lowest p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[18px] font-semibold text-primary">Vetted Pool Directory</h3>
+                <span className="text-[11px] font-semibold text-on-surface-variant">8 Online</span>
+              </div>
+
+              <div className="space-y-3">
+                {PEER_SUPPORTERS.map((peer) => (
+                  <div
+                    key={peer.id}
+                    className="p-3.5 rounded-xl bg-surface-container-low flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm bangla-text shrink-0 ${
+                          peer.avatarTone === 'secondary'
+                            ? 'bg-secondary-fixed text-on-secondary-fixed'
+                            : peer.avatarTone === 'primary'
+                            ? 'bg-primary-container text-on-primary'
+                            : 'bg-surface-container-highest text-primary'
+                        }`}
+                      >
+                        {peer.initials}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[14px] text-primary font-medium">{peer.name}</span>
+                        <span className="text-[11px] text-on-surface-variant">{peer.track}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSupporter(peer)}
+                      aria-label={`View details for ${peer.name}`}
+                      className="px-3 py-1.5 rounded-lg bg-surface text-primary text-[11px] font-semibold shadow-xs hover:bg-surface-container transition-colors shrink-0"
+                    >
+                      Details
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Crisis Escalation Micro-Card */}
+            <div className="p-5 rounded-2xl bg-secondary-fixed/30 flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold text-secondary uppercase">
+                  Emergency Alert
+                </span>
+                <p className="text-[13px] text-on-surface leading-snug">
+                  If thoughts of self-harm or panic become intolerable, connect with the trained
+                  mental health helpline immediately.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('crisis-resources')}
+                className="px-3 py-2 rounded-xl bg-secondary text-on-secondary text-[11px] font-semibold shrink-0 shadow-sm flex items-center gap-1 hover:bg-on-secondary-fixed-variant transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">call</span>
+                Kaan Pete Roi
+              </button>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* Modal: Safety Guidelines */}
+      {/* Modal 1: Safety & Guidelines Modal */}
       {guidelinesOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/40 backdrop-blur-xs">
-          <div className="bg-surface-container-lowest max-w-lg w-full rounded-2xl p-6 space-y-4 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/40 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest max-w-lg w-full rounded-2xl p-6 lg:p-8 space-y-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-[18px] font-semibold text-primary">SHONGI Community Safety Code</h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed">
+                  <span className="material-symbols-outlined text-xl">verified_user</span>
+                </div>
+                <div>
+                  <h3 className="text-[18px] font-semibold text-primary">Safe Haven Guidelines</h3>
+                  <span className="text-[11px] text-on-surface-variant">
+                    SHONGI Peer Pilot Agreement
+                  </span>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setGuidelinesOpen(false)}
-                className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center"
+                aria-label="Close Safe Haven Guidelines"
+                className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface"
               >
-                ✕
+                <span className="material-symbols-outlined text-lg">close</span>
               </button>
             </div>
-            <div className="space-y-3 text-[13px] text-on-surface-variant leading-[1.6]">
-              <p>
-                <strong>1. Protect your privacy:</strong> Never share phone numbers, WhatsApp,
-                home addresses, or bKash/Nagad accounts.
-              </p>
-              <p>
-                <strong>2. Consensual pacing:</strong> Conversation only starts when both people
-                accept. You can decline, ignore, leave, or block anytime.
-              </p>
-              <p>
-                <strong>3. Peer support is not therapy:</strong> Peers share empathy and lived
-                experience—never medical diagnoses or clinical treatment.
-              </p>
+
+            <div className="space-y-4 text-[13px] text-on-surface-variant max-h-96 overflow-y-auto pr-1">
+              <div className="p-3.5 rounded-xl bg-surface-container-low space-y-1">
+                <h4 className="text-[12px] text-primary font-semibold">
+                  1. Zero External Contact Sharing
+                </h4>
+                <p>
+                  Do not exchange WhatsApp, phone numbers, Facebook profile links, or financial
+                  handles. All dialogues remain on this platform under encrypted pseudonymity.
+                </p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-surface-container-low space-y-1">
+                <h4 className="text-[12px] text-primary font-semibold">
+                  2. Respectful Listening Over Prescriptions
+                </h4>
+                <p>
+                  Supporters are not doctors. They do not recommend pharmaceuticals or offer medical
+                  diagnoses. Their role is compassionate shared reflection.
+                </p>
+              </div>
+              <div className="p-3.5 rounded-xl bg-surface-container-low space-y-1">
+                <h4 className="text-[12px] text-primary font-semibold">
+                  3. Voluntary &amp; Zero-Penalty Exit
+                </h4>
+                <p>
+                  You or your peer can disconnect at any point without explanation. Your emotional
+                  comfort is unconditionally prioritized.
+                </p>
+              </div>
             </div>
+
             <button
               type="button"
-              onClick={() => setGuidelinesOpen(false)}
-              className="w-full py-2.5 rounded-xl bg-primary text-on-primary text-[13px] font-semibold"
+              onClick={() => {
+                setGuidelinesOpen(false);
+                showToast('Safety guidelines acknowledged.');
+              }}
+              className="w-full py-3 rounded-xl bg-primary text-on-primary text-[12px] font-semibold hover:bg-primary-container transition-colors"
             >
-              I Understand
+              I Understand &amp; Agree
             </button>
           </div>
         </div>
       )}
 
-      {/* Modal: Report User or Conversation */}
-      {reportTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/40 backdrop-blur-xs">
-          <form
-            onSubmit={handleSubmitReport}
-            className="bg-surface-container-lowest max-w-md w-full rounded-2xl p-6 space-y-4 shadow-xl"
-          >
+      {/* Modal 2: Report Supporter Modal */}
+      {reportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/40 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest max-w-md w-full rounded-2xl p-6 lg:p-7 space-y-5 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-[18px] font-semibold text-primary">
-                Report {reportTarget.label}
-              </h3>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-secondary text-2xl">flag</span>
+                <h3 className="text-[18px] font-semibold text-primary">Report Peer Supporter</h3>
+              </div>
               <button
                 type="button"
-                onClick={() => setReportTarget(null)}
-                className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center"
+                onClick={() => setReportModalOpen(false)}
+                aria-label="Close report modal"
+                className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant"
               >
-                ✕
+                <span className="material-symbols-outlined text-lg">close</span>
               </button>
             </div>
+
+            <p className="text-[13px] text-on-surface-variant">
+              Your report is strictly confidential. Tanvir will not be notified of who initiated
+              this. What happened?
+            </p>
+
             <div className="space-y-2">
               {[
-                'Boundary or safety concern',
-                'Asked for phone number / contact / money',
-                'Harassment or disrespectful remarks',
-                'Spam or promotional behavior',
-              ].map((reason) => (
+                {
+                  val: 'unsolicited-contact',
+                  label: 'Asked for personal contacts or bKash',
+                },
+                {
+                  val: 'judgmental',
+                  label: 'Unsupportive or judgmental remarks',
+                },
+                {
+                  val: 'other',
+                  label: 'Other boundary violation',
+                },
+              ].map((item) => (
                 <label
-                  key={reason}
-                  className="flex items-center gap-2.5 p-2.5 rounded-xl bg-surface-container-low cursor-pointer text-[13px]"
+                  key={item.val}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-surface-container-low hover:bg-surface-container cursor-pointer"
                 >
                   <input
                     type="radio"
                     name="report-reason"
-                    checked={reportReason === reason}
-                    onChange={() => setReportReason(reason)}
+                    value={item.val}
+                    checked={reportReason === item.val}
+                    onChange={() => setReportReason(item.val)}
                     className="accent-secondary"
                   />
-                  <span>{reason}</span>
+                  <span className="text-[12px] text-on-surface">{item.label}</span>
                 </label>
               ))}
             </div>
-            <textarea
-              rows={2}
-              value={reportDetails}
-              onChange={(e) => setReportDetails(e.target.value)}
-              placeholder="Optional details..."
-              className="w-full px-3 py-2 rounded-xl bg-surface-container-low text-[13px] outline-none"
-            />
-            <div className="flex gap-2.5">
+
+            <div className="flex items-center gap-3 pt-2">
               <button
-                type="submit"
-                className="flex-1 py-2.5 rounded-xl bg-secondary text-on-secondary text-[13px] font-semibold"
+                type="button"
+                onClick={() => {
+                  setReportModalOpen(false);
+                  showToast('Report submitted confidentially to SHONGI moderators.');
+                }}
+                className="flex-1 py-3 rounded-xl bg-secondary text-on-secondary text-[12px] font-semibold hover:bg-on-secondary-fixed-variant transition-colors"
               >
-                Submit Report
+                Submit Confidential Report
               </button>
               <button
                 type="button"
-                onClick={() => setReportTarget(null)}
-                className="px-4 py-2.5 rounded-xl bg-surface-container text-[13px]"
+                onClick={() => setReportModalOpen(false)}
+                className="px-4 py-3 rounded-xl bg-surface-container text-on-surface text-[12px] hover:bg-surface-container-high transition-colors"
               >
                 Cancel
               </button>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
+      {/* Modal 3: Block & End Connection Modal */}
+      {endModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/40 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest max-w-md w-full rounded-2xl p-6 lg:p-7 space-y-5 shadow-xl">
+            <div className="w-12 h-12 rounded-2xl bg-secondary-fixed flex items-center justify-center text-secondary">
+              <span className="material-symbols-outlined text-2xl">block</span>
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-[18px] font-semibold text-primary">
+                End Connection with Tanvir?
+              </h3>
+              <p className="text-[13px] text-on-surface-variant leading-relaxed">
+                This will immediately close this peer bridge and purge pending intro messages. You
+                can request another supporter anytime without any penalty.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEndModalOpen(false);
+                  setConnectionEnded(true);
+                  showToast('Connection ended safely. Messages purged.');
+                }}
+                className="flex-1 py-3 rounded-xl bg-secondary text-on-secondary text-[12px] font-semibold hover:bg-on-secondary-fixed-variant transition-colors"
+              >
+                Yes, Disconnect
+              </button>
+              <button
+                type="button"
+                onClick={() => setEndModalOpen(false)}
+                className="px-4 py-3 rounded-xl bg-surface-container text-on-surface text-[12px] hover:bg-surface-container-high transition-colors"
+              >
+                Stay Connected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: Vetted Supporter Details */}
+      {selectedSupporter && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/40 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest max-w-md w-full rounded-2xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary-container text-on-primary flex items-center justify-center font-semibold bangla-text">
+                  {selectedSupporter.initials}
+                </div>
+                <div>
+                  <h3 className="text-[17px] font-semibold text-primary">
+                    {selectedSupporter.name}
+                  </h3>
+                  <span className="text-[12px] text-on-surface-variant">
+                    Avg. response {selectedSupporter.responseTime}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedSupporter(null)}
+                aria-label="Close supporter details"
+                className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            <p className="text-[13px] text-on-surface-variant">{selectedSupporter.summary}</p>
+            <div className="p-3.5 rounded-xl bg-surface-container-low text-[13px] italic text-on-surface bangla-text">
+              &ldquo;{selectedSupporter.story}&rdquo;
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {selectedSupporter.tags.map((t) => (
+                <span
+                  key={t}
+                  className="px-2.5 py-1 rounded-full bg-surface-container text-[11px] font-medium text-primary"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const name = selectedSupporter.name;
+                setSelectedSupporter(null);
+                setRequestStatus('queued');
+                showToast(`Intro request queued for ${name}.`);
+              }}
+              className="w-full py-2.5 rounded-xl bg-primary text-on-primary text-[13px] font-semibold hover:bg-primary-container"
+            >
+              Request Introduction
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 px-4 py-3 rounded-xl bg-primary text-on-primary text-[13px] font-medium shadow-xl z-50">
-          {toastMessage}
+        <div className="fixed bottom-6 right-6 px-4 py-3 rounded-xl bg-primary text-on-primary text-[12px] font-medium shadow-xl flex items-center gap-2 z-50">
+          <span className="material-symbols-outlined text-tertiary-fixed text-lg">
+            check_circle
+          </span>
+          <span>{toastMessage}</span>
         </div>
       )}
     </div>

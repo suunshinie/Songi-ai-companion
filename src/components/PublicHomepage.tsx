@@ -10,7 +10,6 @@ interface PublicHomepageProps {
   onEnterWorkspace: (screen: AppScreen, initialThought?: string) => void;
   onOpenAuth: () => void;
   onContinueAnonymously: () => void;
-  onSignOut: () => void;
 }
 
 type MoodId = 'overwhelmed' | 'focus' | 'talk';
@@ -56,7 +55,6 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
   onEnterWorkspace,
   onOpenAuth,
   onContinueAnonymously,
-  onSignOut,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hoveredMood, setHoveredMood] = useState<MoodId | null>(null);
@@ -112,14 +110,14 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
                 </span>
               </div>
               <span className="text-[11px] text-[#6B6B66] -mt-1 hidden sm:inline tracking-wide">
-                AI is the bridge.
+                Everyday Companion &amp; Connection
               </span>
             </div>
           </a>
 
           {/* Desktop Nav Links */}
           <nav
-            className="hidden md:flex items-center gap-7 text-[15px] font-medium text-[#6B6B66]"
+            className="hidden md:flex items-center gap-8 text-[15px] font-medium text-[#6B6B66]"
             aria-label="Primary Navigation"
           >
             <a
@@ -128,20 +126,12 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
             >
               {language === 'bn' ? 'কীভাবে কাজ করে' : 'How it helps'}
             </a>
-            <button
-              type="button"
-              onClick={() => onEnterWorkspace('peer-pilot')}
+            <a
+              href="#explore"
               className="hover:text-[#2A2A28] transition-colors py-1 whitespace-nowrap"
             >
-              {language === 'bn' ? 'সহমর্মী খুঁজুন' : 'Find People'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onEnterWorkspace('community-feed')}
-              className="hover:text-[#2A2A28] transition-colors py-1 whitespace-nowrap"
-            >
-              {language === 'bn' ? 'কমিউনিটি ফিড' : 'Community'}
-            </button>
+              {language === 'bn' ? 'সহমর্মী সার্কেল' : 'Community'}
+            </a>
             <a
               href="#privacy-safety"
               className="hover:text-[#2A2A28] transition-colors py-1 whitespace-nowrap"
@@ -151,7 +141,7 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
           </nav>
 
           {/* Desktop & Mobile Action Area */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <button
               type="button"
               onClick={onToggleLanguage}
@@ -165,61 +155,39 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
               </span>
             </button>
 
-            {authSummary ? (
-              <>
-                <button
-                  type="button"
-                  data-testid="home-profile-btn"
-                  onClick={() => onEnterWorkspace('privacy-memory-hub')}
-                  className="hidden sm:inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E3D9CD] hover:border-[#2F6F63] text-[#2A2A28] text-[13px] font-medium transition-all whitespace-nowrap"
-                  title="Open your Profile & Privacy Settings"
-                >
+            <button
+              type="button"
+              data-testid="home-auth-btn"
+              onClick={onOpenAuth}
+              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-white border border-[#E3D9CD] hover:border-[#2F6F63] text-[#2A2A28] text-[14px] font-semibold transition-all whitespace-nowrap"
+            >
+              {authSummary ? (
+                <>
                   <span
                     className={`w-2 h-2 rounded-full ${
                       authSummary.needsEmailVerification ? 'bg-[#C97B5A]' : 'bg-[#7A9A7B]'
                     }`}
                   />
                   <span className="max-w-[130px] truncate">
-                    {authSummary.needsEmailVerification ? 'Verify Email' : authSummary.displayName}
+                    {authSummary.needsEmailVerification
+                      ? 'Verify Email'
+                      : authSummary.isAnonymous
+                      ? 'Anonymous'
+                      : authSummary.displayName}
                   </span>
-                </button>
-                <button
-                  type="button"
-                  data-testid="home-workspace-btn"
-                  onClick={() => onEnterWorkspace('ai-companion')}
-                  className="hidden sm:inline-flex items-center justify-center px-4 py-2 rounded-xl bg-[#2F6F63] text-white text-[14px] font-semibold hover:bg-[#24594f] shadow-sm transition-all whitespace-nowrap"
-                >
-                  {language === 'bn' ? 'ওয়ার্কস্পেসে যান' : 'Open Workspace'}
-                </button>
-                <button
-                  type="button"
-                  data-testid="home-signout-btn"
-                  onClick={onSignOut}
-                  className="hidden sm:inline-flex items-center justify-center px-3.5 py-2 rounded-xl border border-[#C97B5A]/45 bg-[#C97B5A]/10 text-[#9a442d] text-[13px] font-semibold hover:bg-[#C97B5A]/20 transition-all whitespace-nowrap"
-                >
-                  {language === 'bn' ? 'সাইন আউট' : 'Sign Out'}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  data-testid="home-auth-btn"
-                  onClick={onOpenAuth}
-                  className="hidden sm:inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-white border border-[#E3D9CD] hover:border-[#2F6F63] text-[#2A2A28] text-[14px] font-semibold transition-all whitespace-nowrap"
-                >
-                  <span>{language === 'bn' ? 'সাইন ইন' : 'Sign in'}</span>
-                </button>
-                <button
-                  type="button"
-                  data-testid="home-start-privately-btn"
-                  onClick={onOpenAuth}
-                  className="hidden sm:inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-[#2F6F63] text-white text-[15px] font-semibold hover:bg-[#24594f] shadow-sm transition-all hover:-translate-y-0.5 whitespace-nowrap"
-                >
-                  {language === 'bn' ? 'নিরাপদে শুরু করুন' : 'Start privately'}
-                </button>
-              </>
-            )}
+                </>
+              ) : (
+                <span>{language === 'bn' ? 'সাইন ইন' : 'Sign in'}</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onEnterWorkspace('ai-companion')}
+              className="hidden sm:inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-[#2F6F63] text-white text-[15px] font-semibold hover:bg-[#24594f] shadow-sm transition-all hover:-translate-y-0.5 whitespace-nowrap"
+            >
+              {language === 'bn' ? 'নিরাপদে শুরু করুন' : 'Start privately'}
+            </button>
 
             <button
               type="button"
@@ -251,26 +219,13 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
               >
                 How it helps
               </a>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onEnterWorkspace('peer-pilot');
-                }}
-                className="py-1 text-left hover:text-[#2F6F63] transition-colors"
+              <a
+                href="#explore"
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-1 hover:text-[#2F6F63] transition-colors"
               >
-                Find People
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onEnterWorkspace('community-feed');
-                }}
-                className="py-1 text-left hover:text-[#2F6F63] transition-colors"
-              >
-                Community Feed
-              </button>
+                Community
+              </a>
               <a
                 href="#privacy-safety"
                 onClick={() => setMobileMenuOpen(false)}
@@ -279,53 +234,26 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
                 Privacy &amp; safety
               </a>
               <div className="pt-3 border-t border-[#E3D9CD] flex flex-col gap-2">
-                {authSummary ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        onEnterWorkspace('ai-companion');
-                      }}
-                      className="w-full text-center py-3 rounded-xl bg-[#2F6F63] text-white font-semibold"
-                    >
-                      Open Workspace ({authSummary.displayName})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        onSignOut();
-                      }}
-                      className="w-full text-center py-2.5 rounded-xl bg-[#C97B5A]/10 border border-[#C97B5A]/45 text-[#9a442d] font-semibold"
-                    >
-                      Sign Out
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        onOpenAuth();
-                      }}
-                      className="w-full text-center py-2.5 rounded-xl bg-white border border-[#E3D9CD] text-[#2A2A28] font-semibold"
-                    >
-                      Sign in (Anonymous / Google / Email)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        onOpenAuth();
-                      }}
-                      className="w-full text-center py-3 rounded-xl bg-[#2F6F63] text-white font-semibold"
-                    >
-                      Start privately
-                    </button>
-                  </>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenAuth();
+                  }}
+                  className="w-full text-center py-2.5 rounded-xl bg-white border border-[#E3D9CD] text-[#2A2A28] font-semibold"
+                >
+                  {authSummary ? 'Account & Verification' : 'Sign in (Anonymous / Google / Email)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onEnterWorkspace('ai-companion');
+                  }}
+                  className="w-full text-center py-3 rounded-xl bg-[#2F6F63] text-white font-semibold"
+                >
+                  Start privately
+                </button>
               </div>
             </nav>
           </div>
@@ -365,118 +293,58 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
                     : 'SHONGI is a calm space to talk things through, reflect privately, and—when you’re ready—connect with people who understand.'}
                 </p>
 
-                {authSummary ? (
-                  <div className="w-full mb-6 space-y-4">
-                    <div className="p-4 rounded-2xl bg-white border border-[#E3D9CD] flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#2F6F63] text-white flex items-center justify-center text-xs font-semibold">
-                          {authSummary.isAnonymous
-                            ? 'AN'
-                            : authSummary.displayName.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-[#2A2A28]">
-                            Welcome back, {authSummary.displayName}
-                          </p>
-                          <p className="text-xs text-[#6B6B66]">
-                            {authSummary.isAnonymous
-                              ? 'Anonymous private session active'
-                              : authSummary.needsEmailVerification
-                              ? 'Email verification pending'
-                              : `Signed in via ${authSummary.authMethod === 'google' ? 'Google' : 'Verified Email'}`}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        data-testid="hero-signout-btn"
-                        onClick={onSignOut}
-                        className="px-3.5 py-2 rounded-xl border border-[#C97B5A]/45 bg-[#C97B5A]/10 text-[#9a442d] text-xs font-semibold hover:bg-[#C97B5A]/20 transition-colors"
-                      >
-                        Sign Out
-                      </button>
-                    </div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto mb-6">
+                  <button
+                    type="button"
+                    onClick={() => onEnterWorkspace('ai-companion')}
+                    className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-[#2F6F63] text-white text-base font-semibold hover:bg-[#24594f] shadow-[0_8px_30px_rgba(42,42,40,0.06)] transition-all hover:-translate-y-0.5 whitespace-nowrap"
+                  >
+                    Start privately
+                  </button>
+                  <a
+                    href="#how-it-helps"
+                    className="inline-flex items-center justify-center px-6 py-3.5 rounded-xl bg-white border border-[#E3D9CD] text-[#2A2A28] text-base font-medium hover:border-[#2F6F63] hover:bg-[#F1EAE1]/40 transition-all hover:-translate-y-0.5 whitespace-nowrap"
+                  >
+                    See how it helps
+                  </a>
+                </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => onEnterWorkspace('ai-companion')}
-                        className="inline-flex items-center justify-center px-6 py-3.5 rounded-xl bg-[#2F6F63] text-white text-sm sm:text-base font-semibold hover:bg-[#24594f] shadow-[0_8px_30px_rgba(42,42,40,0.06)] transition-all hover:-translate-y-0.5 whitespace-nowrap"
-                      >
-                        Talk to SHONGI
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onEnterWorkspace('peer-pilot')}
-                        className="inline-flex items-center justify-center px-5 py-3.5 rounded-xl bg-white border border-[#E3D9CD] text-[#2A2A28] text-sm sm:text-base font-medium hover:border-[#2F6F63] transition-all whitespace-nowrap"
-                      >
-                        Find Your People
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onEnterWorkspace('community-feed')}
-                        className="inline-flex items-center justify-center px-5 py-3.5 rounded-xl bg-white border border-[#E3D9CD] text-[#2A2A28] text-sm sm:text-base font-medium hover:border-[#2F6F63] transition-all whitespace-nowrap"
-                      >
-                        Your Space Feed
-                      </button>
-                    </div>
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-[#6B6B66]">
+                    <svg
+                      className="w-4 h-4 text-[#7A9A7B] flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span>Private by default. You choose what to share.</span>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto mb-6">
-                      <button
-                        type="button"
-                        onClick={onOpenAuth}
-                        className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-[#2F6F63] text-white text-base font-semibold hover:bg-[#24594f] shadow-[0_8px_30px_rgba(42,42,40,0.06)] transition-all hover:-translate-y-0.5 whitespace-nowrap"
-                      >
-                        Start privately
-                      </button>
-                      <a
-                        href="#how-it-helps"
-                        className="inline-flex items-center justify-center px-6 py-3.5 rounded-xl bg-white border border-[#E3D9CD] text-[#2A2A28] text-base font-medium hover:border-[#2F6F63] hover:bg-[#F1EAE1]/40 transition-all hover:-translate-y-0.5 whitespace-nowrap"
-                      >
-                        See how it helps
-                      </a>
-                    </div>
-
-                    <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center gap-2 text-xs sm:text-sm text-[#6B6B66]">
-                        <svg
-                          className="w-4 h-4 text-[#7A9A7B] flex-shrink-0"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                        <span>Private by default. You choose what to share.</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <button
-                          type="button"
-                          data-testid="hero-anon-btn"
-                          onClick={onContinueAnonymously}
-                          className="px-3 py-1.5 rounded-lg bg-[#F1EAE1] border border-[#E3D9CD] hover:border-[#2F6F63] text-[#2F6F63] font-semibold transition-colors"
-                        >
-                          Continue anonymously (No email)
-                        </button>
-                        <button
-                          type="button"
-                          data-testid="hero-signin-btn"
-                          onClick={onOpenAuth}
-                          className="px-3 py-1.5 rounded-lg bg-white border border-[#E3D9CD] hover:border-[#2F6F63] text-[#2A2A28] font-medium transition-colors"
-                        >
-                          Google / Email login &amp; verification →
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      data-testid="hero-anon-btn"
+                      onClick={onContinueAnonymously}
+                      className="px-3 py-1.5 rounded-lg bg-[#F1EAE1] border border-[#E3D9CD] hover:border-[#2F6F63] text-[#2F6F63] font-semibold transition-colors"
+                    >
+                      Continue anonymously (No email)
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="hero-signin-btn"
+                      onClick={onOpenAuth}
+                      className="px-3 py-1.5 rounded-lg bg-white border border-[#E3D9CD] hover:border-[#2F6F63] text-[#2A2A28] font-medium transition-colors"
+                    >
+                      Google / Email login &amp; verification →
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Right Column: Prominent Focal Photograph & Floating Companion Card */}
@@ -1004,23 +872,23 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
                 className="p-4 rounded-xl bg-white border border-[#E3D9CD] hover:border-[#2F6F63] text-left transition-all"
               >
                 <span className="text-xs font-semibold text-[#2F6F63] block">01 · Companion</span>
-                <span className="text-sm font-bold text-[#2A2A28]">Talk to SHONGI</span>
+                <span className="text-sm font-bold text-[#2A2A28]">AI Companion</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onEnterWorkspace('encrypted-journal')}
+                className="p-4 rounded-xl bg-white border border-[#E3D9CD] hover:border-[#2F6F63] text-left transition-all"
+              >
+                <span className="text-xs font-semibold text-[#2F6F63] block">02 · Vault</span>
+                <span className="text-sm font-bold text-[#2A2A28]">Encrypted Journal</span>
               </button>
               <button
                 type="button"
                 onClick={() => onEnterWorkspace('peer-pilot')}
                 className="p-4 rounded-xl bg-white border border-[#E3D9CD] hover:border-[#2F6F63] text-left transition-all"
               >
-                <span className="text-xs font-semibold text-[#C97B5A] block">02 · Peer Match</span>
-                <span className="text-sm font-bold text-[#2A2A28]">Find Your People</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onEnterWorkspace('community-feed')}
-                className="p-4 rounded-xl bg-white border border-[#E3D9CD] hover:border-[#2F6F63] text-left transition-all"
-              >
-                <span className="text-xs font-semibold text-[#2F6F63] block">03 · Your Space</span>
-                <span className="text-sm font-bold text-[#2A2A28]">Community Feed</span>
+                <span className="text-xs font-semibold text-[#C97B5A] block">03 · Community</span>
+                <span className="text-sm font-bold text-[#2A2A28]">Peer Pilot</span>
               </button>
               <button
                 type="button"
@@ -1061,48 +929,20 @@ export const PublicHomepage: React.FC<PublicHomepageProps> = ({
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              {authSummary ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onEnterWorkspace('ai-companion')}
-                    className="w-full sm:w-auto px-8 py-4 rounded-xl bg-[#2F6F63] text-white text-base font-semibold hover:bg-[#24594f] shadow-[0_8px_30px_rgba(42,42,40,0.06)] transition-all hover:-translate-y-0.5"
-                  >
-                    Open SHONGI Workspace
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onEnterWorkspace('community-feed')}
-                    className="w-full sm:w-auto px-7 py-4 rounded-xl bg-white border border-[#E3D9CD] text-[#2A2A28] text-base font-medium hover:border-[#2F6F63] transition-all hover:-translate-y-0.5"
-                  >
-                    Visit Community Feed
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onSignOut}
-                    className="w-full sm:w-auto px-6 py-4 rounded-xl border border-[#C97B5A]/45 bg-[#C97B5A]/10 text-[#9a442d] text-base font-semibold hover:bg-[#C97B5A]/20 transition-all"
-                  >
-                    Sign Out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={onOpenAuth}
-                    className="w-full sm:w-auto px-8 py-4 rounded-xl bg-[#2F6F63] text-white text-base font-semibold hover:bg-[#24594f] shadow-[0_8px_30px_rgba(42,42,40,0.06)] transition-all hover:-translate-y-0.5"
-                  >
-                    Begin privately
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onEnterWorkspace('peer-pilot')}
-                    className="w-full sm:w-auto px-7 py-4 rounded-xl bg-white border border-[#E3D9CD] text-[#2A2A28] text-base font-medium hover:border-[#2F6F63] transition-all hover:-translate-y-0.5"
-                  >
-                    Explore Find Your People
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={() => onEnterWorkspace('ai-companion')}
+                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-[#2F6F63] text-white text-base font-semibold hover:bg-[#24594f] shadow-[0_8px_30px_rgba(42,42,40,0.06)] transition-all hover:-translate-y-0.5"
+              >
+                Begin privately
+              </button>
+              <button
+                type="button"
+                onClick={() => onEnterWorkspace('peer-pilot')}
+                className="w-full sm:w-auto px-7 py-4 rounded-xl bg-white border border-[#E3D9CD] text-[#2A2A28] text-base font-medium hover:border-[#2F6F63] transition-all hover:-translate-y-0.5"
+              >
+                Explore communities
+              </button>
             </div>
           </div>
         </section>

@@ -1,10 +1,5 @@
 import React, { useState } from 'react';
-import {
-  AppScreen,
-  AuthAccountSummary,
-  InAppNotification,
-  Language,
-} from '../types/shongi';
+import { AppScreen, AuthAccountSummary, Language } from '../types/shongi';
 import { SHONGI_IMAGES } from '../data/seedData';
 import { ResilientImage } from './ResilientImage';
 
@@ -12,13 +7,9 @@ interface DashboardShellProps {
   activeScreen: Exclude<AppScreen, 'home'>;
   language: Language;
   authSummary: AuthAccountSummary | null;
-  pendingRequestsCount?: number;
-  notifications?: InAppNotification[];
-  onMarkNotificationRead?: (notifId: string) => void;
   onNavigate: (screen: AppScreen) => void;
   onSetLanguage: (lang: Language) => void;
   onOpenAuth: () => void;
-  onSignOut: () => void;
   children: React.ReactNode;
 }
 
@@ -35,54 +26,20 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   activeScreen,
   language,
   authSummary,
-  pendingRequestsCount = 0,
-  notifications = [],
-  onMarkNotificationRead,
   onNavigate,
   onSetLanguage,
   onOpenAuth,
-  onSignOut,
   children,
 }) => {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const navItems: NavItem[] = [
     {
       id: 'ai-companion',
-      title: 'Talk to SHONGI',
+      title: 'AI Companion',
       banglaSubtitle: 'কথোপকথন',
       icon: 'smart_toy',
       badge: <span className="w-2 h-2 rounded-full bg-secondary-container" />,
-    },
-    {
-      id: 'peer-pilot',
-      title: 'Find People',
-      banglaSubtitle: 'সহমর্মী খুঁজুন',
-      icon: 'group',
-      badge:
-        pendingRequestsCount > 0 ? (
-          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-secondary text-on-secondary tabular-nums">
-            {pendingRequestsCount}
-          </span>
-        ) : (
-          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant">
-            Peers
-          </span>
-        ),
-    },
-    {
-      id: 'community-feed',
-      title: 'Community',
-      banglaSubtitle: 'আপনার পরিসর',
-      icon: 'forum',
-      badge: (
-        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant">
-          Feed
-        </span>
-      ),
     },
     {
       id: 'encrypted-journal',
@@ -96,13 +53,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       ),
     },
     {
-      id: 'privacy-memory-hub',
-      title: 'Profile & Privacy',
-      banglaSubtitle: 'প্রোফাইল ও গোপনীয়তা',
-      icon: 'shield_with_heart',
+      id: 'peer-pilot',
+      title: 'Peer Pilot',
+      banglaSubtitle: 'সহমর্মী সার্কেল',
+      icon: 'group',
       badge: (
-        <span className="material-symbols-outlined text-sm text-on-surface-variant">
-          verified_user
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant">
+          Peer
         </span>
       ),
     },
@@ -115,6 +72,17 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       badge: (
         <span className="text-[11px] px-1.5 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed font-semibold">
           BD 24/7
+        </span>
+      ),
+    },
+    {
+      id: 'privacy-memory-hub',
+      title: 'Privacy & Memory',
+      banglaSubtitle: 'গোপনীয়তা ও মেমোরি',
+      icon: 'shield_with_heart',
+      badge: (
+        <span className="material-symbols-outlined text-sm text-on-surface-variant">
+          verified_user
         </span>
       ),
     },
@@ -132,7 +100,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           type="button"
           onClick={() => handleNavClick('home')}
           className="h-16 flex items-center px-6 gap-3 bg-surface-container-low text-left hover:bg-surface-container transition-colors"
-          title="Return to SHONGI Home"
+          title="Return to SHONGI Public Homepage"
         >
           <ResilientImage
             src={SHONGI_IMAGES.logo}
@@ -144,8 +112,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             <span className="text-[18px] font-semibold text-primary leading-none">
               SHONGI
             </span>
-            <span className="text-[11px] text-on-surface-variant font-normal tracking-wide">
-              AI is the bridge.
+            <span className="text-[11px] text-on-surface-variant font-normal tracking-wide bangla-text">
+              সঙ্গী • Safe Haven
             </span>
           </div>
         </button>
@@ -153,13 +121,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         <div className="px-6 py-2">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant">
             <span className="w-2 h-2 rounded-full bg-tertiary-container animate-pulse" />
-            <span className="text-[11px] font-medium tracking-[0.03em] text-on-surface-variant">
+            <span className="text-[11px] font-semibold tracking-[0.04em] text-on-surface-variant">
               Padma Dusk Sanctuary
             </span>
           </div>
         </div>
 
-        <nav className="flex flex-col px-3 mt-3 space-y-1" aria-label="Sanctuary Navigation">
+        <nav className="flex flex-col px-3 mt-4 space-y-1" aria-label="Sanctuary Navigation">
           {navItems.map((item) => {
             const isActive = activeScreen === item.id;
             return (
@@ -168,9 +136,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 type="button"
                 onClick={() => handleNavClick(item.id)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all text-left w-full ${
+                className={`group flex items-center justify-between px-3.5 py-3 rounded-xl transition-all text-left w-full ${
                   isActive
-                    ? 'bg-primary-container text-on-primary-container font-medium'
+                    ? 'bg-primary-container text-on-primary-container font-semibold'
                     : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                 }`}
               >
@@ -212,7 +180,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
       <div className="px-4 pb-6 flex flex-col gap-3">
         <div className="p-3.5 rounded-xl bg-surface-container text-on-surface">
-          <p className="text-[13px] text-on-surface-variant italic leading-relaxed">
+          <p className="text-[13px] text-on-surface-variant italic leading-snug">
             &ldquo;AI is the bridge. Human connection is the solution.&rdquo;
           </p>
           <span className="text-[11px] text-on-surface-variant block mt-1 bangla-text">
@@ -238,21 +206,6 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
           <span className="material-symbols-outlined text-lg">chevron_right</span>
         </button>
-
-        {authSummary && (
-          <button
-            type="button"
-            data-testid="sidebar-signout-btn"
-            onClick={() => {
-              setMobileDrawerOpen(false);
-              onSignOut();
-            }}
-            className="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-secondary/35 bg-secondary/10 text-secondary text-[13px] font-semibold hover:bg-secondary/20 transition-colors w-full"
-          >
-            <span className="material-symbols-outlined text-base">logout</span>
-            <span>Sign Out</span>
-          </button>
-        )}
       </div>
     </>
   );
@@ -294,24 +247,22 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-low text-tertiary truncate">
                 <span className="w-2 h-2 rounded-full bg-tertiary-container shrink-0" />
                 <span className="text-[11px] font-medium text-on-surface-variant truncate">
-                  {authSummary?.canSyncCloud
-                    ? 'Private Sanctuary Synced'
-                    : 'Private Sanctuary Mode'}
+                  Cloud Synced • On-Device Encrypted
                 </span>
               </div>
               <span className="text-[11px] text-on-surface-variant hidden xl:inline bangla-text">
-                আপনার তথ্য আপনার নিয়ন্ত্রণে
+                অফলাইন ও সম্পূর্ণ নিরাপদ
               </span>
             </div>
 
-            <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
+            <div className="flex items-center gap-3 sm:gap-5 shrink-0">
               <button
                 type="button"
                 onClick={() => onNavigate('home')}
                 className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
               >
                 <span className="material-symbols-outlined text-sm">home</span>
-                <span>Home</span>
+                <span>Public Home</span>
               </button>
 
               <div className="flex items-center bg-surface-container rounded-lg p-0.5">
@@ -339,143 +290,54 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 </button>
               </div>
 
-              {authSummary && (
+              <button
+                type="button"
+                data-testid="shell-auth-btn"
+                onClick={onOpenAuth}
+                className="flex items-center gap-2.5 pl-1 sm:pl-3 py-1 px-2.5 rounded-xl hover:bg-surface-container transition-colors text-left"
+                title="Account, Anonymous Mode, Google & Email Verification"
+              >
+                <div className="text-right hidden sm:flex flex-col">
+                  <span className="text-[12px] text-on-surface font-medium max-w-[140px] truncate">
+                    {authSummary ? authSummary.displayName : 'Local Private Mode'}
+                  </span>
+                  <span
+                    className={`text-[11px] ${
+                      authSummary?.needsEmailVerification
+                        ? 'text-secondary font-semibold'
+                        : 'text-on-surface-variant'
+                    }`}
+                  >
+                    {!authSummary
+                      ? 'Sign In / Anon'
+                      : authSummary.needsEmailVerification
+                      ? 'Verify Email Pending'
+                      : authSummary.isAnonymous
+                      ? 'Anonymous • Private'
+                      : authSummary.authMethod === 'google'
+                      ? 'Google Verified'
+                      : 'Email Verified'}
+                  </span>
+                </div>
                 <div className="relative">
-                  <button
-                    type="button"
-                    data-testid="shell-notifications-btn"
-                    onClick={() => setNotifOpen((v) => !v)}
-                    aria-label="Notifications"
-                    className="relative p-2 rounded-xl hover:bg-surface-container text-on-surface-variant hover:text-primary transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-xl">notifications</span>
-                    {unreadCount > 0 && (
-                      <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-secondary text-on-secondary text-[10px] font-semibold flex items-center justify-center">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {notifOpen && (
-                    <div className="absolute right-0 mt-2 w-80 max-w-[90vw] rounded-2xl bg-surface-container-lowest border border-outline-variant/40 shadow-xl p-4 z-50 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13px] font-semibold text-primary">
-                          Notifications
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setNotifOpen(false)}
-                          className="text-xs text-on-surface-variant hover:text-primary"
-                        >
-                          Close
-                        </button>
-                      </div>
-                      {notifications.length === 0 ? (
-                        <p className="text-[12px] text-on-surface-variant py-3 text-center">
-                          No new notifications yet.
-                        </p>
-                      ) : (
-                        <div className="max-h-64 overflow-y-auto space-y-2">
-                          {notifications.slice(0, 8).map((n) => (
-                            <button
-                              key={n.id}
-                              type="button"
-                              onClick={() => {
-                                onMarkNotificationRead?.(n.id);
-                                setNotifOpen(false);
-                                if (
-                                  n.type === 'peer_request' ||
-                                  n.type === 'request_accepted' ||
-                                  n.type === 'peer_message'
-                                ) {
-                                  onNavigate('peer-pilot');
-                                }
-                              }}
-                              className={`w-full text-left p-2.5 rounded-xl transition-colors ${
-                                n.read
-                                  ? 'bg-surface-container-low text-on-surface-variant'
-                                  : 'bg-secondary-fixed/40 text-on-surface'
-                              }`}
-                            >
-                              <p className="text-[12px] font-semibold text-primary">
-                                {n.title}
-                              </p>
-                              <p className="text-[11px] text-on-surface-variant mt-0.5">
-                                {n.body}
-                              </p>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-[11px] font-bold">
+                    {authSummary
+                      ? authSummary.isAnonymous
+                        ? 'AN'
+                        : authSummary.displayName.slice(0, 2).toUpperCase()
+                      : 'PV'}
+                  </div>
+                  <div
+                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-surface ${
+                      authSummary?.needsEmailVerification
+                        ? 'bg-secondary'
+                        : authSummary
+                        ? 'bg-tertiary-container'
+                        : 'bg-outline-variant'
+                    }`}
+                  />
                 </div>
-              )}
-
-              {authSummary ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    data-testid="shell-profile-btn"
-                    onClick={() => onNavigate('privacy-memory-hub')}
-                    className="flex items-center gap-2 py-1 px-2.5 rounded-xl hover:bg-surface-container transition-colors text-left"
-                    title="Profile & Privacy Settings"
-                  >
-                    <div className="text-right hidden sm:flex flex-col">
-                      <span className="text-[12px] text-on-surface font-medium max-w-[130px] truncate">
-                        {authSummary.displayName}
-                      </span>
-                      <span
-                        className={`text-[11px] ${
-                          authSummary.needsEmailVerification
-                            ? 'text-secondary font-semibold'
-                            : 'text-on-surface-variant'
-                        }`}
-                      >
-                        {authSummary.needsEmailVerification
-                          ? 'Verify Email Pending'
-                          : authSummary.isAnonymous
-                          ? 'Anonymous • Private'
-                          : authSummary.authMethod === 'google'
-                          ? 'Google Verified'
-                          : 'Email Verified'}
-                      </span>
-                    </div>
-                    <div className="relative">
-                      <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center text-[11px] font-semibold">
-                        {authSummary.isAnonymous
-                          ? 'AN'
-                          : authSummary.displayName.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div
-                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-surface ${
-                          authSummary.needsEmailVerification
-                            ? 'bg-secondary'
-                            : 'bg-tertiary-container'
-                        }`}
-                      />
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    data-testid="shell-signout-btn"
-                    onClick={onSignOut}
-                    className="px-3 py-1.5 rounded-xl border border-secondary/40 bg-secondary/10 text-secondary text-[12px] font-semibold hover:bg-secondary/20 transition-colors"
-                  >
-                    Sign Out
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  data-testid="shell-auth-btn"
-                  onClick={onOpenAuth}
-                  className="px-3.5 py-1.5 rounded-xl bg-primary text-on-primary text-[12px] font-semibold hover:bg-primary-container transition-colors"
-                >
-                  Sign In
-                </button>
-              )}
+              </button>
             </div>
           </div>
         </header>
