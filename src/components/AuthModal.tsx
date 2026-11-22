@@ -19,6 +19,7 @@ interface AuthModalProps {
   authSummary: AuthAccountSummary | null;
   onClose: () => void;
   onAuthSuccess?: () => void;
+  onSignOutComplete?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -26,6 +27,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   authSummary,
   onClose,
   onAuthSuccess,
+  onSignOutComplete,
 }) => {
   const [emailTab, setEmailTab] = useState<'signin' | 'signup'>('signup');
   const [displayName, setDisplayName] = useState('');
@@ -136,7 +138,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSignOut = () =>
     runAction('signout', async () => {
       await signOutSanctuary();
-      setInfoMessage('Signed out cleanly.');
+      onSignOutComplete?.();
+      onClose();
     });
 
   return (
